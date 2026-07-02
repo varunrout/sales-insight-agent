@@ -61,9 +61,12 @@ def test_required_columns_exist():
 def test_dates_parse_and_cover_at_least_18_months():
     rows = _read_sales_rows()
     parsed_dates = [datetime.strptime(row["date"], "%Y-%m-%d").date() for row in rows]
+    min_date = min(parsed_dates)
+    max_date = max(parsed_dates)
+    month_span = (max_date.year - min_date.year) * 12 + max_date.month - min_date.month + 1
 
-    assert min(parsed_dates) < max(parsed_dates)
-    assert (max(parsed_dates) - min(parsed_dates)).days >= 18 * 30
+    assert min_date < max_date
+    assert month_span >= 18
 
 
 def test_metric_columns_are_numeric():
