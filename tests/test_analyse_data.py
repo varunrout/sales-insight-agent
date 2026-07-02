@@ -1,6 +1,8 @@
 from pathlib import Path
 import ast
 
+import pandas as pd
+
 from tools import analyse_data as analyse_module
 from tools.analyse_data import analyse_data
 
@@ -67,12 +69,86 @@ def test_filtering_by_year_and_region_is_applied():
     assert "2025-12-31" in result
 
 
+def test_product_category_filter_does_not_cross_filter_customer_segment():
+    data = analyse_module._load_sales_data(analyse_module.DATA_PATH)
+    expected_rows = data[data["product_category"] == "Enterprise Suite"]
+
+    result = analyse_data("What is total revenue by sales channel for Enterprise Suite?")
+
+    assert "Total revenue by sales channel" in result
+    assert f"Scope: {len(expected_rows):,} rows" in result
+    assert set(expected_rows["customer_segment"].unique()) != {"Enterprise"}
+
+
 def test_month_over_month_revenue_trend_works():
     result = analyse_data("Show the month-over-month revenue trend.")
 
     assert "Month-over-month revenue trend" in result
     assert "Recent months:" in result
     assert "MoM" in result
+
+
+def test_emea_partner_q3_vs_q2_respects_year_filter():
+    data = analyse_module._load_sales_data(analyse_module.DATA_PATH)
+    expected = data[
+        (data["date"].dt.year == 2025)
+        & (data["region"] == "EMEA")
+        & (data["sales_channel"] == "Partner")
+        & (data["date"].dt.quarter.isin([2, 3]))
+    ]
+    q2_revenue = expected[expected["date"].dt.quarter == 2]["revenue"].sum()
+    q3_revenue = expected[expected["date"].dt.quarter == 3]["revenue"].sum()
+
+    result = analyse_data("Compare EMEA Partner Q3 vs Q2 in 2025")
+
+    assert f"Q2 revenue: ${q2_revenue:,.2f}" in result
+    assert f"Q3 revenue: ${q3_revenue:,.2f}" in result
+
+
+def test_emea_partner_q3_vs_q2_handles_missing_quarter():
+    data = pd.DataFrame(
+        [
+            {
+                "date": pd.Timestamp("2025-04-01"),
+                "region": "EMEA",
+                "sales_channel": "Partner",
+                "revenue": 100.0,
+                "conversion_rate": 0.05,
+                "gross_margin": 0.50,
+            }
+        ]
+    )
+
+    result = analyse_module._emea_partner_q3_vs_q2(data)
+
+    assert "Q3 data is missing" in result
+
+
+def test_emea_partner_q3_vs_q2_handles_zero_q2_revenue():
+    data = pd.DataFrame(
+        [
+            {
+                "date": pd.Timestamp("2025-04-01"),
+                "region": "EMEA",
+                "sales_channel": "Partner",
+                "revenue": 0.0,
+                "conversion_rate": 0.04,
+                "gross_margin": 0.50,
+            },
+            {
+                "date": pd.Timestamp("2025-07-01"),
+                "region": "EMEA",
+                "sales_channel": "Partner",
+                "revenue": 100.0,
+                "conversion_rate": 0.03,
+                "gross_margin": 0.45,
+            },
+        ]
+    )
+
+    result = analyse_module._emea_partner_q3_vs_q2(data)
+
+    assert "Revenue change: n/a because Q2 revenue is zero" in result
 
 
 def test_unsupported_query_returns_graceful_message():
@@ -96,3 +172,9 @@ def test_analyse_data_does_not_use_eval_or_exec():
     for node in ast.walk(tree):
         if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
             assert node.func.id not in {"eval", "exec"}
+
+
+def test_asks_revenue_by_returns_bool():
+    result = analyse_module._asks_revenue_by("total revenue by region", "region")
+
+    assert result is True

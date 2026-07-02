@@ -64,7 +64,7 @@ def analyse_data(query: str) -> str:
     normalized_query = query.lower()
 
     if _is_emea_partner_q3_vs_q2(normalized_query):
-        return _emea_partner_q3_vs_q2(data)
+        return _emea_partner_q3_vs_q2(filtered)
     if _asks_month_over_month(normalized_query):
         return _month_over_month_revenue(filtered)
     if _asks_average_margin_by_channel(normalized_query):
@@ -117,28 +117,44 @@ def _apply_filters(data: pd.DataFrame, query: str) -> pd.DataFrame:
     if year_match:
         filtered = filtered[filtered["date"].dt.year == int(year_match.group(1))]
 
-    for column in FILTER_COLUMNS.values():
+    matched_product_categories = _matching_values(
+        filtered, "product_category", normalized_query
+    )
+    if matched_product_categories:
+        filtered = filtered[filtered["product_category"].isin(matched_product_categories)]
+
+    for column in ("region", "sales_channel", "customer_segment"):
+        if column == "customer_segment" and matched_product_categories:
+            continue
         filtered = _filter_by_known_values(filtered, column, normalized_query)
 
     return filtered
 
 
+def _matching_values(
+    data: pd.DataFrame, column: str, normalized_query: str
+) -> list[str]:
+    return [
+        value
+        for value in sorted(
+            data[column].dropna().unique(), key=lambda item: -len(str(item))
+        )
+        if re.search(rf"\b{re.escape(str(value).lower())}\b", normalized_query)
+    ]
+
+
 def _filter_by_known_values(
     data: pd.DataFrame, column: str, normalized_query: str
 ) -> pd.DataFrame:
-    matches = [
-        value
-        for value in sorted(data[column].dropna().unique(), key=lambda item: -len(str(item)))
-        if re.search(rf"\b{re.escape(str(value).lower())}\b", normalized_query)
-    ]
+    matches = _matching_values(data, column, normalized_query)
     if not matches:
         return data
     return data[data[column].isin(matches)]
 
 
 def _asks_revenue_by(normalized_query: str, dimension: str) -> bool:
-    return "revenue" in normalized_query and re.search(
-        rf"\bby\s+{re.escape(dimension)}\b", normalized_query
+    return "revenue" in normalized_query and bool(
+        re.search(rf"\bby\s+{re.escape(dimension)}\b", normalized_query)
     )
 
 
@@ -304,6 +320,12 @@ def _emea_partner_q3_vs_q2(data: pd.DataFrame) -> str:
         return "No EMEA Partner Q2 or Q3 records were found."
 
     scoped["quarter"] = "Q" + scoped["date"].dt.quarter.astype(str)
+    available_quarters = set(scoped["quarter"].unique())
+    missing_quarters = {"Q2", "Q3"}.difference(available_quarters)
+    if missing_quarters:
+        missing = ", ".join(sorted(missing_quarters))
+        return f"Cannot compare EMEA Partner Q3 vs Q2 because {missing} data is missing."
+
     comparison = scoped.groupby("quarter", as_index=False).agg(
         revenue=("revenue", "sum"),
         conversion_rate=("conversion_rate", "mean"),
@@ -314,9 +336,14 @@ def _emea_partner_q3_vs_q2(data: pd.DataFrame) -> str:
     q3_revenue = values.loc["Q3", "revenue"]
     q2_conversion = values.loc["Q2", "conversion_rate"]
     q3_conversion = values.loc["Q3", "conversion_rate"]
-    revenue_change = (q3_revenue - q2_revenue) / q2_revenue
+    revenue_change = None if q2_revenue == 0 else (q3_revenue - q2_revenue) / q2_revenue
     conversion_change = q3_conversion - q2_conversion
     softness = "Q3 softness detected" if q3_revenue < q2_revenue else "No Q3 revenue softness detected"
+    revenue_change_text = (
+        "n/a because Q2 revenue is zero"
+        if revenue_change is None
+        else _format_percent(revenue_change)
+    )
 
     return "\n".join(
         [
@@ -324,7 +351,7 @@ def _emea_partner_q3_vs_q2(data: pd.DataFrame) -> str:
             softness,
             f"Q2 revenue: {_format_money(q2_revenue)}",
             f"Q3 revenue: {_format_money(q3_revenue)}",
-            f"Revenue change: {_format_percent(revenue_change)}",
+            f"Revenue change: {revenue_change_text}",
             f"Q2 conversion rate: {_format_percent(q2_conversion)}",
             f"Q3 conversion rate: {_format_percent(q3_conversion)}",
             f"Conversion rate change: {conversion_change:.2%} points",
