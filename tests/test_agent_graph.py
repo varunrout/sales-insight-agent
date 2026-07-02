@@ -57,7 +57,7 @@ def test_chart_query_routes_to_visualise():
     trace = run_agent_with_trace("Show me a chart of gross margin by channel.")
 
     assert trace["tools_used"] == ["visualise"]
-    assert "visualise placeholder" in trace["answer"]
+    assert "chart saved to" in trace["answer"]
 
 
 def test_document_question_routes_to_search_documents():
