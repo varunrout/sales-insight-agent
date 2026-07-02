@@ -1,4 +1,5 @@
 from pathlib import Path
+import ast
 
 from tools import analyse_data as analyse_module
 from tools.analyse_data import analyse_data
@@ -86,3 +87,12 @@ def test_missing_dataset_path_is_handled_cleanly(monkeypatch):
     result = analyse_module.analyse_data("What is total revenue by region?")
 
     assert "Sales dataset not found" in result
+
+
+def test_analyse_data_does_not_use_eval_or_exec():
+    source = Path(analyse_module.__file__).read_text(encoding="utf-8")
+    tree = ast.parse(source)
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
+            assert node.func.id not in {"eval", "exec"}
