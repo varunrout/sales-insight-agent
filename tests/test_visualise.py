@@ -13,6 +13,19 @@ def _use_test_chart_output(monkeypatch) -> Path:
     return TEST_CHART_OUTPUT_PATH
 
 
+def _use_lightweight_chart_output(monkeypatch) -> Path:
+    output_path = _use_test_chart_output(monkeypatch)
+
+    def fake_save_chart(fig, filename: str, description: str) -> str:
+        output_path.mkdir(parents=True, exist_ok=True)
+        chart_path = output_path / filename
+        chart_path.write_text("<html><body>test chart</body></html>", encoding="utf-8")
+        return f"{description} chart saved to {chart_path}"
+
+    monkeypatch.setattr(visualise_module, "_save_chart", fake_save_chart)
+    return output_path
+
+
 def _chart_path_from_response(response: str) -> Path:
     return Path(response.rsplit(" saved to ", maxsplit=1)[1])
 
@@ -22,7 +35,7 @@ def test_visualise_imports_successfully():
 
 
 def test_revenue_by_region_chart_is_created(monkeypatch):
-    _use_test_chart_output(monkeypatch)
+    _use_lightweight_chart_output(monkeypatch)
 
     response = visualise("Show me a bar chart of revenue by region.")
     chart_path = _chart_path_from_response(response)
@@ -32,8 +45,32 @@ def test_revenue_by_region_chart_is_created(monkeypatch):
     assert chart_path.suffix == ".html"
 
 
+def test_generated_html_is_self_contained(monkeypatch):
+    output_path = _use_test_chart_output(monkeypatch)
+    calls = {}
+
+    class FakeFigure:
+        def write_html(self, chart_path, include_plotlyjs, full_html):
+            calls["include_plotlyjs"] = include_plotlyjs
+            calls["full_html"] = full_html
+            Path(chart_path).write_text("<html>plotly.js</html>", encoding="utf-8")
+
+    response = visualise_module._save_chart(
+        FakeFigure(),
+        "self_contained_test.html",
+        "Self-contained test",
+    )
+    chart_path = output_path / "self_contained_test.html"
+    html = chart_path.read_text(encoding="utf-8")
+
+    assert response == f"Self-contained test chart saved to {chart_path}"
+    assert calls == {"include_plotlyjs": True, "full_html": True}
+    assert "https://cdn.plot.ly" not in html
+    assert "plotly.js" in html.lower()
+
+
 def test_monthly_revenue_line_chart_is_created(monkeypatch):
-    _use_test_chart_output(monkeypatch)
+    _use_lightweight_chart_output(monkeypatch)
 
     response = visualise("Show a line chart of monthly revenue.")
     chart_path = _chart_path_from_response(response)
@@ -44,7 +81,7 @@ def test_monthly_revenue_line_chart_is_created(monkeypatch):
 
 
 def test_average_gross_margin_by_channel_chart_is_created(monkeypatch):
-    _use_test_chart_output(monkeypatch)
+    _use_lightweight_chart_output(monkeypatch)
 
     response = visualise("Chart average gross margin by sales channel.")
     chart_path = _chart_path_from_response(response)
@@ -55,7 +92,7 @@ def test_average_gross_margin_by_channel_chart_is_created(monkeypatch):
 
 
 def test_top_products_by_revenue_chart_is_created(monkeypatch):
-    _use_test_chart_output(monkeypatch)
+    _use_lightweight_chart_output(monkeypatch)
 
     response = visualise("Show the top 3 products by revenue.")
     chart_path = _chart_path_from_response(response)
@@ -66,7 +103,7 @@ def test_top_products_by_revenue_chart_is_created(monkeypatch):
 
 
 def test_month_over_month_revenue_chart_is_created(monkeypatch):
-    _use_test_chart_output(monkeypatch)
+    _use_lightweight_chart_output(monkeypatch)
 
     response = visualise("Plot month-over-month revenue.")
     chart_path = _chart_path_from_response(response)
@@ -76,8 +113,19 @@ def test_month_over_month_revenue_chart_is_created(monkeypatch):
     assert chart_path.name == "month_over_month_revenue.html"
 
 
+def test_momentum_does_not_route_to_month_over_month(monkeypatch):
+    _use_lightweight_chart_output(monkeypatch)
+
+    response = visualise("Plot revenue momentum by region.")
+    chart_path = _chart_path_from_response(response)
+
+    assert "Revenue by region chart saved to" in response
+    assert chart_path.name == "revenue_by_region.html"
+    assert chart_path.name != "month_over_month_revenue.html"
+
+
 def test_top_products_by_units_chart_is_created(monkeypatch):
-    _use_test_chart_output(monkeypatch)
+    _use_lightweight_chart_output(monkeypatch)
 
     response = visualise("Show top 4 products by units_sold.")
     chart_path = _chart_path_from_response(response)

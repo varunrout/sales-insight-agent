@@ -5,6 +5,7 @@ import pandas as pd
 import plotly.express as px
 
 import config
+from tools.data_loader import load_sales_data
 
 
 TOOL_NAME = "visualise"
@@ -61,27 +62,7 @@ def visualise(query: str) -> str:
 
 
 def _load_sales_data(data_path: Path) -> pd.DataFrame | str:
-    if not data_path.exists():
-        return f"Sales dataset not found at {data_path}."
-
-    try:
-        data = pd.read_csv(data_path)
-    except Exception as exc:
-        return f"Sales dataset could not be loaded: {exc}"
-
-    missing_columns = REQUIRED_COLUMNS.difference(data.columns)
-    if missing_columns:
-        missing = ", ".join(sorted(missing_columns))
-        return f"Sales dataset is missing required columns: {missing}."
-
-    try:
-        data["date"] = pd.to_datetime(data["date"], format="%Y-%m-%d", errors="raise")
-        for column in NUMERIC_COLUMNS:
-            data[column] = pd.to_numeric(data[column], errors="raise")
-    except Exception as exc:
-        return f"Sales dataset failed validation: {exc}"
-
-    return data
+    return load_sales_data(data_path, REQUIRED_COLUMNS, NUMERIC_COLUMNS)
 
 
 def _asks_revenue_by(normalized_query: str, dimension: str) -> bool:
@@ -102,7 +83,7 @@ def _asks_month_over_month_revenue(normalized_query: str) -> bool:
     return "revenue" in normalized_query and (
         "month-over-month" in normalized_query
         or "month over month" in normalized_query
-        or "mom" in normalized_query
+        or bool(re.search(r"\bmom\b", normalized_query))
     )
 
 
@@ -139,7 +120,7 @@ def _parse_top_n(query: str, default: int = 5) -> int:
 def _save_chart(fig, filename: str, description: str) -> str:
     CHART_OUTPUT_PATH.mkdir(parents=True, exist_ok=True)
     chart_path = CHART_OUTPUT_PATH / filename
-    fig.write_html(chart_path, include_plotlyjs="cdn", full_html=True)
+    fig.write_html(chart_path, include_plotlyjs=True, full_html=True)
     return f"{description} chart saved to {chart_path}"
 
 
