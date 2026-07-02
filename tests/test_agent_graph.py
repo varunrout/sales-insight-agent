@@ -34,7 +34,7 @@ def test_simple_sales_query_routes_to_analyse_data():
     trace = run_agent_with_trace("What is revenue by region?")
 
     assert trace["tools_used"] == ["analyse_data"]
-    assert "analyse_data placeholder" in trace["answer"]
+    assert "Total revenue by region" in trace["answer"]
 
 
 def test_singular_customer_query_routes_to_analyse_data():
@@ -43,7 +43,7 @@ def test_singular_customer_query_routes_to_analyse_data():
     )
 
     assert trace["tools_used"] == ["analyse_data"]
-    assert "analyse_data placeholder" in trace["answer"]
+    assert "I can answer structured sales questions" in trace["answer"]
 
 
 def test_forecast_query_routes_to_forecast():
