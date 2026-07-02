@@ -1,4 +1,5 @@
 from collections.abc import Callable
+import re
 from typing import Any
 
 from agent.state import AgentState
@@ -9,6 +10,10 @@ from tools.visualise import visualise
 
 
 MAX_ITERATIONS = 3
+UNSUPPORTED_QUERY_MESSAGE = "No supported tool route was found for this query."
+GENERIC_TOOL_FAILURE_MESSAGE = (
+    "I could not complete the request with the selected tool yet."
+)
 
 ToolFunction = Callable[[str], str]
 
@@ -29,6 +34,8 @@ FORECAST_KEYWORDS = {
     "next month",
     "next quarter",
     "next year",
+    "next 30 days",
+    "next 4 weeks",
 }
 
 VISUALISE_KEYWORDS = {
@@ -49,9 +56,12 @@ DOCUMENT_KEYWORDS = {
     "report",
     "brief",
     "market overview",
+    "product strategy",
     "commentary",
     "mentions",
     "say about",
+    "risk",
+    "risks",
 }
 
 ANALYSIS_KEYWORDS = {
@@ -60,6 +70,7 @@ ANALYSIS_KEYWORDS = {
     "margin",
     "gross margin",
     "units",
+    "customer",
     "customers",
     "orders",
     "region",
@@ -80,9 +91,22 @@ def _initial_state(query: str) -> AgentState:
     }
 
 
+def _query_tokens(query: str) -> set[str]:
+    return set(re.findall(r"\b\w+\b", query.lower()))
+
+
 def _contains_any(query: str, keywords: set[str]) -> bool:
     normalized_query = query.lower()
-    return any(keyword in normalized_query for keyword in keywords)
+    tokens = _query_tokens(query)
+
+    for keyword in keywords:
+        normalized_keyword = keyword.lower()
+        if " " in normalized_keyword:
+            if re.search(rf"\b{re.escape(normalized_keyword)}\b", normalized_query):
+                return True
+        elif normalized_keyword in tokens:
+            return True
+    return False
 
 
 def route_tool(query: str) -> str | None:
@@ -101,7 +125,7 @@ def execute_tool(tool_name: str | None, query: str) -> dict[str, Any]:
     if tool_name is None:
         return {
             "tool": None,
-            "result": "No supported tool route was found for this query.",
+            "result": UNSUPPORTED_QUERY_MESSAGE,
             "error": None,
         }
 
@@ -121,12 +145,7 @@ def execute_tool(tool_name: str | None, query: str) -> dict[str, Any]:
 
 def _build_final_answer(tool_result: dict[str, Any]) -> str:
     if tool_result["error"]:
-        return f"I could not complete the request: {tool_result['error']}"
-    if tool_result["tool"] is None:
-        return (
-            "I could not route that request to a supported stub tool yet. "
-            "Try asking about sales data, forecasts, charts or documents."
-        )
+        return GENERIC_TOOL_FAILURE_MESSAGE
     return str(tool_result["result"])
 
 
@@ -144,10 +163,11 @@ def run_agent_with_trace(query: str) -> dict[str, Any]:
             break
 
         state["iterations"] += 1
-        tool_name = route_tool(query)
-        state["tool_calls"].append({"name": tool_name, "query": query})
+        user_query = state["messages"][-1]["content"]
+        tool_name = route_tool(user_query)
+        state["tool_calls"].append({"name": tool_name, "query": user_query})
 
-        tool_result = execute_tool(tool_name, query)
+        tool_result = execute_tool(tool_name, user_query)
         state["tool_results"].append(tool_result)
 
         if tool_result["tool"]:
@@ -161,6 +181,7 @@ def run_agent_with_trace(query: str) -> dict[str, Any]:
         "answer": state["final_answer"] or "",
         "tools_used": state["last_tools_used"],
         "iterations": state["iterations"],
+        "intermediate_outputs": state["tool_results"],
         "errors": state["errors"],
         "tool_calls": state["tool_calls"],
         "tool_results": state["tool_results"],

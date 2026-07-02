@@ -1,4 +1,10 @@
-from agent.graph import execute_tool, run_agent, run_agent_with_trace
+from agent.graph import (
+    GENERIC_TOOL_FAILURE_MESSAGE,
+    UNSUPPORTED_QUERY_MESSAGE,
+    execute_tool,
+    run_agent,
+    run_agent_with_trace,
+)
 
 
 def test_graph_imports_successfully():
@@ -20,11 +26,21 @@ def test_run_agent_with_trace_returns_expected_shape():
     assert isinstance(trace["answer"], str)
     assert isinstance(trace["tools_used"], list)
     assert isinstance(trace["iterations"], int)
+    assert isinstance(trace["intermediate_outputs"], list)
     assert isinstance(trace["errors"], list)
 
 
 def test_simple_sales_query_routes_to_analyse_data():
     trace = run_agent_with_trace("What is revenue by region?")
+
+    assert trace["tools_used"] == ["analyse_data"]
+    assert "analyse_data placeholder" in trace["answer"]
+
+
+def test_singular_customer_query_routes_to_analyse_data():
+    trace = run_agent_with_trace(
+        "Which customer segment has the highest conversion rate?"
+    )
 
     assert trace["tools_used"] == ["analyse_data"]
     assert "analyse_data placeholder" in trace["answer"]
@@ -56,7 +72,15 @@ def test_unknown_or_unsupported_query_does_not_crash():
 
     assert trace["tools_used"] == []
     assert trace["errors"] == []
-    assert "could not route" in trace["answer"].lower()
+    assert trace["answer"] == UNSUPPORTED_QUERY_MESSAGE
+    assert trace["intermediate_outputs"][0]["result"] == UNSUPPORTED_QUERY_MESSAGE
+
+
+def test_paragraph_does_not_route_to_visualise_by_substring():
+    trace = run_agent_with_trace("Summarize this paragraph.")
+
+    assert trace["tools_used"] == []
+    assert trace["answer"] == UNSUPPORTED_QUERY_MESSAGE
 
 
 def test_unknown_tool_is_handled_gracefully():
@@ -65,6 +89,23 @@ def test_unknown_tool_is_handled_gracefully():
     assert result["tool"] == "not_a_tool"
     assert result["result"] is None
     assert result["error"] == "Unknown tool requested: not_a_tool"
+
+
+def test_tool_error_details_are_not_exposed_in_answer(monkeypatch):
+    import agent.graph as graph
+
+    def failing_tool(query):
+        raise RuntimeError("database password leaked in stack trace")
+
+    monkeypatch.setitem(graph.TOOL_REGISTRY, "analyse_data", failing_tool)
+    trace = graph.run_agent_with_trace("What is revenue by region?")
+
+    assert trace["answer"] == GENERIC_TOOL_FAILURE_MESSAGE
+    assert trace["errors"] == ["database password leaked in stack trace"]
+    assert trace["intermediate_outputs"][0]["error"] == (
+        "database password leaked in stack trace"
+    )
+    assert "database password" not in trace["answer"]
 
 
 def test_iteration_limit_is_enforced(monkeypatch):
