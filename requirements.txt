@@ -1,0 +1,15 @@
+langgraph
+langchain
+langchain-core
+langchain-anthropic
+chromadb
+pandas
+numpy
+lightgbm
+statsmodels
+streamlit
+plotly
+python-dotenv
+scikit-learn
+pytest
+sentence-transformers

@@ -1,0 +1,51 @@
+[
+  {
+    "id": "structured_revenue_by_region",
+    "type": "structured",
+    "question": "What is total revenue by region for 2025?",
+    "expected_tool_route": ["analyse_data"],
+    "expected_output": "A grouped table or summary ranking regions by total revenue, with North America highest."
+  },
+  {
+    "id": "structured_emea_partner_q3",
+    "type": "structured",
+    "question": "How did EMEA Partner revenue and conversion rate perform in Q3 compared with Q2?",
+    "expected_tool_route": ["analyse_data"],
+    "expected_output": "A quarter comparison showing Q3 softness in EMEA Partner performance."
+  },
+  {
+    "id": "forecast_revenue_next_month",
+    "type": "forecast",
+    "question": "Forecast total revenue for the next 30 days.",
+    "expected_tool_route": ["forecast"],
+    "expected_output": "A forward-looking revenue forecast with uncertainty bands once the forecasting tool exists."
+  },
+  {
+    "id": "visualisation_channel_margin",
+    "type": "visualisation",
+    "question": "Show a bar chart of average gross margin by sales channel.",
+    "expected_tool_route": ["visualise"],
+    "expected_output": "A chart showing Direct with the strongest average gross margin."
+  },
+  {
+    "id": "document_market_risks",
+    "type": "document",
+    "question": "What risks does the market overview mention for EMEA and Marketplace?",
+    "expected_tool_route": ["search_documents"],
+    "expected_output": "Document snippets describing EMEA Q3 partner risk and Marketplace promotion sensitivity."
+  },
+  {
+    "id": "multi_step_apac_growth_margin",
+    "type": "multi-step",
+    "question": "Compare APAC revenue growth with gross margin, then explain what the product strategy brief recommends.",
+    "expected_tool_route": ["analyse_data", "search_documents"],
+    "expected_output": "A combined quantitative and document-based answer about APAC growth and margin strategy."
+  },
+  {
+    "id": "multi_step_emea_chart_and_commentary",
+    "type": "multi-step",
+    "question": "Find the commentary on EMEA Q3 softness, then visualise EMEA revenue by channel across quarters.",
+    "expected_tool_route": ["search_documents", "analyse_data", "visualise"],
+    "expected_output": "A sourced explanation followed by a chart-ready quarterly channel breakdown."
+  }
+]
