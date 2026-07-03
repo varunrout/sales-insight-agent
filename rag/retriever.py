@@ -94,10 +94,15 @@ def _tokenize(text: str) -> set[str]:
 def _token_counts(text: str) -> dict[str, int]:
     counts: dict[str, int] = {}
     for token in re.findall(r"\b[a-z0-9]+\b", text.lower()):
-        if len(token) <= 2 or token in _STOP_WORDS:
+        if token in _STOP_WORDS:
+            continue
+        if len(token) <= 2 and token not in _QUARTER_TOKENS:
             continue
         counts[token] = counts.get(token, 0) + 1
     return counts
+
+
+_QUARTER_TOKENS = {"q1", "q2", "q3", "q4"}
 
 
 _STOP_WORDS = {

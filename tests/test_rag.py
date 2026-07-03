@@ -57,6 +57,16 @@ def test_chunk_text_terminates_when_overlap_would_prevent_progress():
     assert len(chunks) < len(text)
 
 
+def test_chunk_text_terminates_for_url_like_text_with_large_overlap():
+    text = "https://example.com/" + ("commercialsalesinsight" * 5)
+
+    chunks = chunk_text(text, chunk_size=24, chunk_overlap=23)
+
+    assert chunks
+    assert len(chunks) <= len(text)
+    assert len(set(chunks)) > 1
+
+
 def test_chunk_text_splits_before_markdown_header_boundary():
     text = "Intro sentence with enough text before header. ## Regional outlook follows."
 
@@ -78,6 +88,39 @@ def test_retrieve_documents_returns_relevant_market_risk_doc():
         "quarterly_sales_report.md",
     }
     assert "EMEA" in results[0].text
+
+
+def test_retrieve_documents_preserves_q3_query_token():
+    results = retrieve_documents("Q3", top_k=3)
+
+    assert results
+    assert any("Q3" in result.text for result in results)
+
+
+def test_quarter_terms_influence_retrieval_ranking(monkeypatch):
+    import rag.retriever as retriever
+
+    chunks = [
+        DocumentChunk(
+            chunk_id="q2-note-1",
+            source="q2-note.md",
+            text="EMEA risk was reviewed during Q2 planning.",
+            metadata={},
+        ),
+        DocumentChunk(
+            chunk_id="q3-note-1",
+            source="q3-note.md",
+            text="EMEA risk was elevated during Q3 planning.",
+            metadata={},
+        ),
+    ]
+    monkeypatch.setattr(retriever, "ingest_documents", lambda docs_path: chunks)
+
+    q2_results = retriever.retrieve_documents("EMEA risk Q2", top_k=2)
+    q3_results = retriever.retrieve_documents("EMEA risk Q3", top_k=2)
+
+    assert q2_results[0].source == "q2-note.md"
+    assert q3_results[0].source == "q3-note.md"
 
 
 def test_retrieve_documents_returns_relevant_product_strategy_doc():

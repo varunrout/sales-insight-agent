@@ -124,7 +124,7 @@ def _nearest_boundary(
         return start + sentence_boundary + 1
 
     word_boundary = boundary_window.rfind(" ")
-    if word_boundary > 0:
+    if word_boundary > minimum_boundary:
         return start + word_boundary
 
     return proposed_end
