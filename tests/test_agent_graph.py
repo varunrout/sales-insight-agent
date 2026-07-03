@@ -50,7 +50,7 @@ def test_forecast_query_routes_to_forecast():
     trace = run_agent_with_trace("Forecast revenue for the next month.")
 
     assert trace["tools_used"] == ["forecast"]
-    assert "forecast placeholder" in trace["answer"]
+    assert "Forecast for revenue" in trace["answer"]
 
 
 def test_chart_query_routes_to_visualise():
