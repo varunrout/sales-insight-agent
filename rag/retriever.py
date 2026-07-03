@@ -65,7 +65,9 @@ def format_search_results(results: list[SearchResult]) -> str:
 
 
 def _score_chunk(query: str, query_tokens: set[str], chunk: DocumentChunk) -> float:
-    chunk_tokens = _tokenize(chunk.text)
+    chunk_text = chunk.text.lower()
+    chunk_token_counts = _token_counts(chunk_text)
+    chunk_tokens = set(chunk_token_counts)
     if not chunk_tokens:
         return 0.0
 
@@ -73,9 +75,9 @@ def _score_chunk(query: str, query_tokens: set[str], chunk: DocumentChunk) -> fl
     if not overlap:
         return 0.0
 
-    term_frequency = sum(chunk.text.lower().count(token) for token in overlap)
+    term_frequency = sum(chunk_token_counts[token] for token in overlap)
     overlap_score = len(overlap) / math.sqrt(len(query_tokens))
-    phrase_score = 1.5 if query.lower().strip() in chunk.text.lower() else 0.0
+    phrase_score = 1.5 if query.lower().strip() in chunk_text else 0.0
     source_score = _source_name_score(query_tokens, chunk.source)
     return round(overlap_score + (term_frequency * 0.08) + phrase_score + source_score, 4)
 
@@ -86,11 +88,16 @@ def _source_name_score(query_tokens: set[str], source: str) -> float:
 
 
 def _tokenize(text: str) -> set[str]:
-    return {
-        token
-        for token in re.findall(r"[a-z0-9]+", text.lower())
-        if len(token) > 2 and token not in _STOP_WORDS
-    }
+    return set(_token_counts(text))
+
+
+def _token_counts(text: str) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for token in re.findall(r"\b[a-z0-9]+\b", text.lower()):
+        if len(token) <= 2 or token in _STOP_WORDS:
+            continue
+        counts[token] = counts.get(token, 0) + 1
+    return counts
 
 
 _STOP_WORDS = {

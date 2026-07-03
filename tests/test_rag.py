@@ -1,8 +1,8 @@
 import inspect
 
 from config import DOCS_PATH, ROOT_DIR
-from rag.ingest import chunk_text, ingest_documents, load_markdown_documents
-from rag.retriever import format_search_results, retrieve_documents
+from rag.ingest import DocumentChunk, chunk_text, ingest_documents, load_markdown_documents
+from rag.retriever import _score_chunk, format_search_results, retrieve_documents
 
 
 def test_rag_modules_import_successfully():
@@ -48,6 +48,26 @@ def test_chunk_text_is_deterministic_and_overlapping():
     assert len(first) > 1
 
 
+def test_chunk_text_terminates_when_overlap_would_prevent_progress():
+    text = "alpha beta gamma. ## Next section with enough text to continue safely."
+
+    chunks = chunk_text(text, chunk_size=24, chunk_overlap=23)
+
+    assert chunks
+    assert len(chunks) < len(text)
+
+
+def test_chunk_text_splits_before_markdown_header_boundary():
+    text = "Intro sentence with enough text before header. ## Regional outlook follows."
+
+    chunks = chunk_text(text, chunk_size=50, chunk_overlap=0)
+
+    assert len(chunks) > 1
+    assert chunks[0].endswith("header.")
+    assert chunks[1].startswith("## Regional")
+    assert all(not chunk.endswith("#") for chunk in chunks)
+
+
 def test_retrieve_documents_returns_relevant_market_risk_doc():
     results = retrieve_documents("EMEA Partner Q3 risk", top_k=2)
 
@@ -76,6 +96,17 @@ def test_retrieve_documents_respects_top_k_and_score_order():
 
 def test_retrieve_documents_handles_empty_query():
     assert retrieve_documents("", top_k=3) == []
+
+
+def test_score_chunk_counts_whole_tokens_not_substrings():
+    chunk = DocumentChunk(
+        chunk_id="test-1",
+        source="test.md",
+        text="A brisk market update without the target token.",
+        metadata={},
+    )
+
+    assert _score_chunk("risk", {"risk"}, chunk) == 0.0
 
 
 def test_retrieve_documents_handles_missing_docs_path():

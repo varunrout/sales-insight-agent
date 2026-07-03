@@ -55,6 +55,7 @@ def chunk_text(
     chunks: list[str] = []
     start = 0
     while start < len(normalized):
+        previous_start = start
         end = min(start + chunk_size, len(normalized))
         if end < len(normalized):
             end = _nearest_boundary(normalized, start, end, chunk_overlap)
@@ -66,6 +67,8 @@ def chunk_text(
         if end >= len(normalized):
             break
         start = max(0, end - chunk_overlap)
+        if start <= previous_start:
+            start = end
 
     return chunks
 
@@ -108,14 +111,17 @@ def _nearest_boundary(
     minimum_boundary: int,
 ) -> int:
     boundary_window = text[start:proposed_end]
-    paragraph_or_sentence = max(
+    header_boundary = boundary_window.rfind("## ")
+    if header_boundary > minimum_boundary:
+        return start + header_boundary
+
+    sentence_boundary = max(
         boundary_window.rfind(". "),
         boundary_window.rfind("? "),
         boundary_window.rfind("! "),
-        boundary_window.rfind("## "),
     )
-    if paragraph_or_sentence > minimum_boundary:
-        return start + paragraph_or_sentence + 1
+    if sentence_boundary > minimum_boundary:
+        return start + sentence_boundary + 1
 
     word_boundary = boundary_window.rfind(" ")
     if word_boundary > 0:
