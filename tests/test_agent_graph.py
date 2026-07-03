@@ -64,7 +64,8 @@ def test_document_question_routes_to_search_documents():
     trace = run_agent_with_trace("What does the market overview say about EMEA?")
 
     assert trace["tools_used"] == ["search_documents"]
-    assert "search_documents placeholder" in trace["answer"]
+    assert "Top document matches:" in trace["answer"]
+    assert "market_overview.md" in trace["answer"]
 
 
 def test_unknown_or_unsupported_query_does_not_crash():
