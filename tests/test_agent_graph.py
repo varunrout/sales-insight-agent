@@ -1,7 +1,11 @@
+import inspect
+
 from agent.graph import (
     GENERIC_TOOL_FAILURE_MESSAGE,
+    MAX_TOOL_CALLS,
     UNSUPPORTED_QUERY_MESSAGE,
     execute_tool,
+    plan_tool_calls,
     run_agent,
     run_agent_with_trace,
 )
@@ -68,6 +72,41 @@ def test_document_question_routes_to_search_documents():
     assert "market_overview.md" in trace["answer"]
 
 
+def test_planner_returns_ordered_tool_chain_for_analysis_plus_chart():
+    assert plan_tool_calls("Analyse EMEA Q3 softness and show a chart of revenue by region.") == [
+        "analyse_data",
+        "visualise",
+    ]
+
+
+def test_run_agent_executes_analysis_plus_visualise_chain():
+    trace = run_agent_with_trace("Analyse EMEA Q3 softness and show a chart of revenue by region.")
+
+    assert trace["tools_used"] == ["analyse_data", "visualise"]
+    assert "Step 1 (analyse_data):" in trace["answer"]
+    assert "Step 2 (visualise):" in trace["answer"]
+
+
+def test_run_agent_executes_search_documents_plus_forecast_chain():
+    trace = run_agent_with_trace(
+        "Search the docs for EMEA risks and forecast revenue for next month."
+    )
+
+    assert trace["tools_used"] == ["search_documents", "forecast"]
+    assert "Step 1 (search_documents):" in trace["answer"]
+    assert "Step 2 (forecast):" in trace["answer"]
+
+
+def test_run_agent_executes_search_documents_plus_analyse_data_chain():
+    trace = run_agent_with_trace(
+        "What does the product strategy say, and show top products by revenue?"
+    )
+
+    assert trace["tools_used"] == ["search_documents", "analyse_data"]
+    assert "Step 1 (search_documents):" in trace["answer"]
+    assert "Step 2 (analyse_data):" in trace["answer"]
+
+
 def test_unknown_or_unsupported_query_does_not_crash():
     trace = run_agent_with_trace("Can you make this more sparkly?")
 
@@ -109,6 +148,46 @@ def test_tool_error_details_are_not_exposed_in_answer(monkeypatch):
     assert "database password" not in trace["answer"]
 
 
+def test_partial_failure_returns_partial_answer_without_sensitive_details(monkeypatch):
+    import agent.graph as graph
+
+    def failing_search(query):
+        raise RuntimeError("secret-token-123 leaked")
+
+    monkeypatch.setitem(graph.TOOL_REGISTRY, "search_documents", failing_search)
+    trace = graph.run_agent_with_trace(
+        "Search the docs for EMEA risks and forecast revenue for next month."
+    )
+
+    assert trace["tools_used"] == ["search_documents", "forecast"]
+    assert "I completed part of your request" in trace["answer"]
+    assert "secret-token-123" not in trace["answer"]
+    assert any("secret-token-123" in error for error in trace["errors"])
+
+
+def test_max_tool_call_limit_is_enforced(monkeypatch):
+    import agent.graph as graph
+
+    monkeypatch.setattr(
+        graph,
+        "plan_tool_calls",
+        lambda _: [
+            "analyse_data",
+            "visualise",
+            "search_documents",
+            "forecast",
+            "analyse_data",
+            "visualise",
+        ],
+    )
+    trace = graph.run_agent_with_trace("compound query")
+
+    assert trace["iterations"] == MAX_TOOL_CALLS
+    assert len(trace["tool_calls"]) == MAX_TOOL_CALLS
+    assert len(trace["intermediate_outputs"]) == MAX_TOOL_CALLS
+    assert "Tool call limit reached" in trace["errors"][0]
+
+
 def test_iteration_limit_is_enforced(monkeypatch):
     import agent.graph as graph
 
@@ -118,3 +197,11 @@ def test_iteration_limit_is_enforced(monkeypatch):
     assert trace["iterations"] == 0
     assert trace["errors"] == ["Iteration limit reached before completion."]
     assert "iteration limit" in trace["answer"].lower()
+
+
+def test_agent_graph_source_does_not_use_eval_or_exec():
+    import agent.graph as graph
+
+    source = inspect.getsource(graph)
+    assert "eval(" not in source
+    assert "exec(" not in source
