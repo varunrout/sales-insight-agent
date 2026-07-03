@@ -70,11 +70,16 @@ def _load_sales_data(data_path: Path) -> pd.DataFrame | str:
 def _parse_metric(query: str) -> str | None:
     normalized_query = query.lower()
     if "new customers" in normalized_query or "new_customers" in normalized_query:
-        return "new_customers"
-    if "unit" in normalized_query or "units_sold" in normalized_query:
-        return "units_sold"
-    if "revenue" in normalized_query or "sales" in normalized_query:
-        return "revenue"
+        metric = "new_customers"
+    elif "unit" in normalized_query or "units_sold" in normalized_query:
+        metric = "units_sold"
+    elif "revenue" in normalized_query or "sales" in normalized_query:
+        metric = "revenue"
+    else:
+        return None
+
+    if metric in SUPPORTED_METRICS:
+        return metric
     return None
 
 
@@ -97,10 +102,10 @@ def _parse_horizon_days(query: str) -> int:
 
 def _parse_output_frequency(query: str) -> str:
     normalized_query = query.lower()
-    if "daily" in normalized_query or "day" in normalized_query:
-        return "daily"
-    if "weekly" in normalized_query or "week" in normalized_query:
+    if re.search(r"\b(weekly|week|weeks)\b", normalized_query):
         return "weekly"
+    if re.search(r"\b(daily|day|days)\b", normalized_query):
+        return "daily"
     return "daily"
 
 
@@ -146,7 +151,7 @@ def _feature_columns() -> list[str]:
 def _build_model():
     try:
         return HistGradientBoostingRegressor(max_iter=160, random_state=42)
-    except Exception:
+    except (TypeError, ValueError):
         return RandomForestRegressor(n_estimators=120, random_state=42, n_jobs=1)
 
 
@@ -224,19 +229,30 @@ def _next_feature_row(history: pd.DataFrame, metric: str, next_date: pd.Timestam
 
 def _format_future_rows(future: pd.DataFrame, metric: str, output_frequency: str) -> str:
     if output_frequency == "weekly":
+        weekly = future.copy()
+        weekly["forecast_week"] = np.arange(len(weekly)) // 7
+        weekly["period_start"] = weekly.groupby("forecast_week")["date"].transform("min")
         display = (
-            future.assign(week_start=future["date"].dt.to_period("W").dt.start_time)
-            .groupby("week_start", as_index=False)[["p10", "p50", "p90"]]
+            weekly.groupby(["forecast_week", "period_start"], as_index=False)[
+                ["p10", "p50", "p90"]
+            ]
             .sum()
-            .rename(columns={"week_start": "period"})
+            .sort_values("forecast_week")
         )
     else:
         display = future.rename(columns={"date": "period"})
 
     rows = []
     for row in display.head(12).itertuples(index=False):
+        if output_frequency == "weekly":
+            period = (
+                f"Week {int(row.forecast_week) + 1} starting "
+                f"{row.period_start.date()}"
+            )
+        else:
+            period = str(row.period.date())
         rows.append(
-            f"- {row.period.date()}: P10={_format_number(row.p10)}, "
+            f"- {period}: P10={_format_number(row.p10)}, "
             f"P50={_format_number(row.p50)}, P90={_format_number(row.p90)}"
         )
     if len(display) > 12:

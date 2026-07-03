@@ -1,6 +1,8 @@
 from pathlib import Path
 import ast
 
+import pandas as pd
+
 from tools import forecast as forecast_module
 from tools.forecast import forecast
 
@@ -45,6 +47,52 @@ def test_next_30_days_is_parsed_correctly():
     assert "Output frequency: daily" in result
 
 
+def test_next_4_weeks_returns_four_forecast_week_rows():
+    result = forecast("Forecast revenue for next 4 weeks.")
+    weekly_rows = [
+        line
+        for line in result.splitlines()
+        if line.startswith("- Week ") and "starting" in line
+    ]
+
+    assert len(weekly_rows) == 4
+    assert weekly_rows[0].startswith("- Week 1 starting 2026-01-01:")
+
+
+def test_weekly_frequency_is_not_overridden_by_monday_substring():
+    frequency = forecast_module._parse_output_frequency(
+        "Forecast revenue for next 4 weeks starting Monday."
+    )
+
+    assert frequency == "weekly"
+
+
+def test_weekday_substring_does_not_force_daily_frequency():
+    frequency = forecast_module._parse_output_frequency(
+        "Forecast revenue weekly for weekdays."
+    )
+
+    assert frequency == "weekly"
+
+
+def test_weekly_format_uses_consecutive_forecast_windows():
+    future = pd.DataFrame(
+        {
+            "date": pd.date_range("2026-01-01", periods=28, freq="D"),
+            "p10": [1.0] * 28,
+            "p50": [2.0] * 28,
+            "p90": [3.0] * 28,
+        }
+    )
+
+    result = forecast_module._format_future_rows(future, "revenue", "weekly")
+    weekly_rows = [line for line in result.splitlines() if line.startswith("- Week ")]
+
+    assert len(weekly_rows) == 4
+    assert weekly_rows[0].startswith("- Week 1 starting 2026-01-01:")
+    assert weekly_rows[1].startswith("- Week 2 starting 2026-01-08:")
+
+
 def test_unsupported_metric_returns_graceful_message():
     result = forecast("Forecast discount rate for next 30 days.")
 
@@ -74,6 +122,17 @@ def test_forecast_does_not_use_eval_or_exec():
     for node in ast.walk(tree):
         if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
             assert node.func.id not in {"eval", "exec"}
+
+
+def test_build_model_does_not_catch_all_exceptions():
+    source = Path(forecast_module.__file__).read_text(encoding="utf-8")
+    tree = ast.parse(source)
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ExceptHandler):
+            assert node.type is not None
+            if isinstance(node.type, ast.Name):
+                assert node.type.id != "Exception"
 
 
 def test_missing_dataset_path_is_handled_cleanly(monkeypatch):
