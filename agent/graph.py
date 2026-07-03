@@ -9,7 +9,8 @@ from tools.search_documents import search_documents
 from tools.visualise import visualise
 
 
-MAX_ITERATIONS = 3
+MAX_ITERATIONS = 5
+MAX_TOOL_CALLS = 5
 UNSUPPORTED_QUERY_MESSAGE = "No supported tool route was found for this query."
 GENERIC_TOOL_FAILURE_MESSAGE = (
     "I could not complete the request with the selected tool yet."
@@ -65,6 +66,10 @@ DOCUMENT_KEYWORDS = {
 }
 
 ANALYSIS_KEYWORDS = {
+    "analyse",
+    "analyze",
+    "analysis",
+    "softness",
     "sales",
     "revenue",
     "margin",
@@ -109,15 +114,105 @@ def _contains_any(query: str, keywords: set[str]) -> bool:
     return False
 
 
-def route_tool(query: str) -> str | None:
-    if _contains_any(query, FORECAST_KEYWORDS):
+def _split_query_steps(query: str) -> list[str]:
+    clauses = [
+        clause.strip()
+        for clause in re.split(r"\b(?:and then|then|and|also)\b|,", query, flags=re.IGNORECASE)
+        if clause.strip()
+    ]
+    return clauses or [query]
+
+
+def _route_clause_tool(clause: str) -> str | None:
+    if _contains_any(clause, FORECAST_KEYWORDS):
         return "forecast"
-    if _contains_any(query, VISUALISE_KEYWORDS):
+    if _contains_any(clause, VISUALISE_KEYWORDS):
         return "visualise"
-    if _contains_any(query, DOCUMENT_KEYWORDS):
+    if _contains_any(clause, DOCUMENT_KEYWORDS):
         return "search_documents"
-    if _contains_any(query, ANALYSIS_KEYWORDS):
+    if _contains_any(clause, ANALYSIS_KEYWORDS):
         return "analyse_data"
+    return None
+
+
+def plan_tool_calls(query: str) -> list[str]:
+    planned: list[str] = []
+    for clause in _split_query_steps(query):
+        tool_name = _route_clause_tool(clause)
+        if tool_name and tool_name not in planned:
+            planned.append(tool_name)
+    return planned
+
+
+def _limit_tool_plan(planned_tools: list[str]) -> tuple[list[str], str | None]:
+    if len(planned_tools) <= MAX_TOOL_CALLS:
+        return planned_tools, None
+    return (
+        planned_tools[:MAX_TOOL_CALLS],
+        f"Tool call limit reached. Truncated plan to {MAX_TOOL_CALLS} calls.",
+    )
+
+
+def _format_successful_outputs(tool_results: list[dict[str, Any]]) -> str:
+    successful_results = [
+        result
+        for result in tool_results
+        if result["tool"] and not result["error"] and result["result"] is not None
+    ]
+
+    if not successful_results:
+        return ""
+    if len(successful_results) == 1:
+        return str(successful_results[0]["result"])
+
+    lines = []
+    for index, result in enumerate(successful_results, start=1):
+        lines.append(f"Step {index} ({result['tool']}):\n{result['result']}")
+    return "\n\n".join(lines)
+
+
+def _build_final_answer(tool_results: list[dict[str, Any]]) -> str:
+    if not tool_results:
+        return UNSUPPORTED_QUERY_MESSAGE
+
+    successful_output_text = _format_successful_outputs(tool_results)
+    failed_steps = [result for result in tool_results if result["error"]]
+
+    if successful_output_text and not failed_steps:
+        return successful_output_text
+    if successful_output_text and failed_steps:
+        return (
+            f"{successful_output_text}\n\n"
+            "I completed part of your request, but one or more steps could not be completed."
+        )
+    if failed_steps:
+        return GENERIC_TOOL_FAILURE_MESSAGE
+    return UNSUPPORTED_QUERY_MESSAGE
+
+
+def _execute_planned_tools(state: AgentState, planned_tools: list[str]) -> None:
+    user_query = state["messages"][-1]["content"]
+    for tool_name in planned_tools:
+        if state["iterations"] >= MAX_ITERATIONS:
+            state["errors"].append("Iteration limit reached before completion.")
+            break
+
+        state["iterations"] += 1
+        state["tool_calls"].append({"name": tool_name, "query": user_query})
+
+        tool_result = execute_tool(tool_name, user_query)
+        state["tool_results"].append(tool_result)
+
+        if tool_result["tool"]:
+            state["last_tools_used"].append(tool_result["tool"])
+        if tool_result["error"]:
+            state["errors"].append(tool_result["error"])
+
+
+def route_tool(query: str) -> str | None:
+    planned = plan_tool_calls(query)
+    if planned:
+        return planned[0]
     return None
 
 
@@ -143,39 +238,33 @@ def execute_tool(tool_name: str | None, query: str) -> dict[str, Any]:
         return {"tool": tool_name, "result": None, "error": str(exc)}
 
 
-def _build_final_answer(tool_result: dict[str, Any]) -> str:
-    if tool_result["error"]:
-        return GENERIC_TOOL_FAILURE_MESSAGE
-    return str(tool_result["result"])
-
-
 def run_agent(query: str) -> str:
     return run_agent_with_trace(query)["answer"]
 
 
 def run_agent_with_trace(query: str) -> dict[str, Any]:
     state = _initial_state(query)
+    user_query = state["messages"][-1]["content"]
+    planned_tools, plan_warning = _limit_tool_plan(plan_tool_calls(user_query))
+    if plan_warning:
+        state["errors"].append(plan_warning)
 
-    while state["final_answer"] is None:
-        if state["iterations"] >= MAX_ITERATIONS:
-            state["errors"].append("Iteration limit reached before completion.")
-            state["final_answer"] = "I stopped because the iteration limit was reached."
-            break
+    if not planned_tools:
+        state["tool_calls"].append({"name": None, "query": user_query})
+        state["tool_results"].append(
+            {
+                "tool": None,
+                "result": UNSUPPORTED_QUERY_MESSAGE,
+                "error": None,
+            }
+        )
+    else:
+        _execute_planned_tools(state, planned_tools)
 
-        state["iterations"] += 1
-        user_query = state["messages"][-1]["content"]
-        tool_name = route_tool(user_query)
-        state["tool_calls"].append({"name": tool_name, "query": user_query})
-
-        tool_result = execute_tool(tool_name, user_query)
-        state["tool_results"].append(tool_result)
-
-        if tool_result["tool"]:
-            state["last_tools_used"].append(tool_result["tool"])
-        if tool_result["error"]:
-            state["errors"].append(tool_result["error"])
-
-        state["final_answer"] = _build_final_answer(tool_result)
+    if state["iterations"] >= MAX_ITERATIONS and len(state["tool_results"]) < len(planned_tools):
+        state["final_answer"] = "I stopped because the iteration limit was reached."
+    else:
+        state["final_answer"] = _build_final_answer(state["tool_results"])
 
     return {
         "answer": state["final_answer"] or "",
@@ -212,7 +301,7 @@ def build_graph() -> Any:
         if tool_result["error"]:
             state["errors"].append(tool_result["error"])
         state["iterations"] += 1
-        state["final_answer"] = _build_final_answer(tool_result)
+        state["final_answer"] = _build_final_answer(state["tool_results"])
         return state
 
     graph.add_node("route", route_node)
