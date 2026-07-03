@@ -1,234 +1,175 @@
 # sales-insight-agent
 
-Agentic AI assistant for commercial sales analytics, built with LangGraph, RAG, forecasting, Plotly visualisation and a Streamlit chat interface.
+**An agentic AI sales analytics assistant that combines structured sales analysis, forecasting, visualisation, and document retrieval into one natural-language Streamlit interface.**
 
-## Project status
+## 1. Project overview
 
-This repository is currently being built from a planned issue backlog. The README describes the target architecture, intended capabilities and delivery sequence. For the detailed build plan, see `plan.md`.
+`sales-insight-agent` is a local-first analytics assistant for commercial questions. It routes each user query to one or more deterministic tools and returns both an answer and a transparent execution trace.
 
-## What this project solves
+The current system is deterministic and local-first; it does **not** call an LLM yet.
 
-Commercial teams often need to answer sales questions from multiple disconnected sources:
+## 2. Why this project matters
 
-- structured sales data in CSVs, spreadsheets or warehouse tables
-- written business documents such as quarterly reports, product briefs and market notes
-- forecasting workflows that sit outside day-to-day reporting
-- charts and summaries that have to be manually created for stakeholders
+Revenue teams often need answers that span numeric data and written business context. This project demonstrates a practical way to unify:
 
-`sales-insight-agent` is designed to bring these workflows into one natural-language assistant. A user should be able to ask a business question and have the system decide whether to analyse the sales dataset, forecast future metrics, search business documents, generate a chart or combine multiple tools in sequence.
+- structured sales analysis
+- forecasting
+- chart generation
+- retrieval over business documents
 
-## Target capabilities
+in one chat workflow suitable for analyst and stakeholder demos.
 
-### 1. Sales data analysis
+## 3. Key features
 
-Ask natural-language questions over structured sales data.
+- Deterministic tool planner with ordered multi-step tool chaining (max 5 calls).
+- Natural-language Streamlit chat interface with persistent chat history.
+- Tool trace visibility (`tools_used`, `intermediate_outputs`, `errors`, `iterations`).
+- Structured analysis over synthetic-but-realistic sales data.
+- Forecasting for revenue, units sold, and new customers.
+- Plotly chart generation saved as local HTML under `outputs/charts/`.
+- Document retrieval over sample business documents in `data/docs/`.
+- Graceful unsupported-query and partial-failure handling.
 
-Example questions:
+## 4. Architecture
 
-```text
-What is total revenue by region?
-Which 5 products have the highest sales volume this quarter?
-Show me the month-over-month revenue trend.
-How does revenue differ by sales channel?
-```
-
-Primary tool: `analyse_data`
-
-Expected output:
-
-- formatted summaries
-- grouped revenue or units tables
-- top-N performance views
-- date-filtered analysis
-- friendly error handling for unsupported questions
-
-### 2. Forecasting
-
-Generate forward-looking forecasts from the sales dataset.
-
-Example questions:
-
-```text
-Forecast revenue for the next 4 weeks.
-What will units sold look like over the next quarter?
-Forecast new customers for the next 30 days.
-```
-
-Primary tool: `forecast`
-
-Expected output:
-
-- point forecast
-- P10, P50 and P90 estimates
-- chronological train/test validation
-- simple explanation of trend direction and uncertainty
-
-### 3. Visualisation
-
-Create charts on demand and surface them in the UI.
-
-Example questions:
-
-```text
-Show me a bar chart of revenue by region.
-Plot the sales trend as a line chart.
-Give me a breakdown of units sold by product category as a pie chart.
-```
-
-Primary tool: `visualise`
-
-Expected output:
-
-- Plotly HTML charts
-- valid local file paths
-- chart titles and axis labels
-- short business interpretation
-
-### 4. Document search
-
-Search business documents when numerical data alone is not enough.
-
-Example questions:
-
-```text
-What does the quarterly report say about growth targets?
-Find mentions of the EMEA region in our sales documents.
-What were the key risks highlighted in the market overview?
-```
-
-Primary tool: `search_documents`
-
-Expected output:
-
-- retrieved text snippets
-- source document names
-- relevance scores
-- low-confidence result handling
-
-### 5. Multi-step agent reasoning
-
-Answer questions that require multiple tools.
-
-Example questions:
-
-```text
-Compare last quarter's revenue to the forecast, then show me a chart of the gap.
-Find what the sales report says about EMEA, then pull the actual numbers for that region.
-```
-
-Expected route examples:
-
-```text
-analyse_data -> forecast -> visualise -> final answer
-search_documents -> analyse_data -> final answer
-```
-
-## Target architecture
+The UI calls `run_agent_with_trace`, which uses a deterministic planner to sequence tool execution and return a final answer plus trace.
 
 ```mermaid
 flowchart TD
-    A[User] --> B[Streamlit Chat UI]
-    B --> C[LangGraph Agent]
-    C --> D{Tool Router}
+    U[User] --> UI[Streamlit UI ui/app.py]
+    UI --> AG[run_agent_with_trace]
+    AG --> PL[Deterministic planner]
+    PL --> T1[analyse_data]
+    PL --> T2[forecast]
+    PL --> T3[visualise]
+    PL --> T4[search_documents]
 
-    D --> E[analyse_data]
-    D --> F[forecast]
-    D --> G[visualise]
-    D --> H[search_documents]
+    T1 --> DS[data/sample_sales.csv]
+    T2 --> DS
+    T3 --> DS
+    T3 --> CH[outputs/charts/*.html]
 
-    E --> I[Sales CSV]
-    F --> I
-    G --> I
-    H --> J[ChromaDB Vector Store]
-    J --> K[Business Documents]
+    T4 --> RR[RAG retriever]
+    RR --> DOCS[data/docs/*.md]
 
-    E --> L[Tool Result]
-    F --> L
-    G --> L
-    H --> L
-
-    L --> C
-    C --> M{Need another tool?}
-    M -->|Yes| D
-    M -->|No| N[Final Answer]
-    N --> B
+    T1 --> R[Trace + final answer]
+    T2 --> R
+    T3 --> R
+    T4 --> R
+    R --> UI
 ```
 
-## Planned project structure
+See `docs/architecture.md` for a longer architecture walkthrough.
+
+## 5. Tooling / tech stack
+
+| Area | Stack |
+|---|---|
+| Orchestration | Python, deterministic planner in `agent/graph.py` |
+| Data analysis | pandas |
+| Forecasting | scikit-learn, numpy |
+| Visualisation | Plotly |
+| Retrieval | local retriever in `rag/` |
+| UI | Streamlit |
+| Testing | pytest |
+
+## 6. Dataset and business documents
+
+- **Dataset:** `data/sample_sales.csv` (synthetic but commercially realistic).
+- **Documents:** markdown files in `data/docs/` used for retrieval.
+- **Charts:** generated locally as HTML files in `outputs/charts/`.
+
+## 7. How the agent works
+
+1. User submits a question in Streamlit chat.
+2. `run_agent_with_trace(query)` plans one or more tools in order.
+3. Tools execute sequentially with bounded iterations and tool-call limit.
+4. The agent returns:
+   - `answer`
+   - `tools_used`
+   - `intermediate_outputs`
+   - `errors`
+   - `iterations`
+5. UI renders answer, trace expanders, and charts when chart paths are present.
+
+## 8. Example questions
+
+Structured data analysis:
+
+- `What is revenue by region?`
+
+Forecasting:
+
+- `Forecast revenue for the next month.`
+
+Visualisation:
+
+- `Show a chart of revenue by sales channel.`
+
+Document search:
+
+- `What does the market overview say about EMEA?`
+
+Multi-step reasoning:
+
+- `Search the docs for EMEA risks and forecast revenue for next month.`
+- `Analyse EMEA Q3 softness and show a chart of revenue by region.`
+- `What does the product strategy say, and show top products by revenue?`
+
+## 9. How to run locally
+
+From repo root:
+
+```bash
+python -m pytest
+streamlit run ui/app.py
+```
+
+Then open the local Streamlit URL shown in the terminal.
+
+## 10. Testing
+
+Run the full test suite from repo root:
+
+```bash
+python -m pytest
+```
+
+## 11. Project structure
 
 ```text
 sales-insight-agent/
   agent/
   tools/
   rag/
-  data/
-  data/docs/
   ui/
+    app.py
+  data/
+    sample_sales.csv
+    docs/
+  docs/
+    architecture.md
+    demo_script.md
   notebooks/
+  outputs/
+    charts/
   tests/
   config.py
   requirements.txt
-  .env.example
-  plan.md
   README.md
 ```
 
-## Tech stack
+## 12. Current limitations
 
-| Area | Tools |
-|---|---|
-| Agent orchestration | LangGraph, LangChain tool interfaces |
-| LLM integration | Anthropic Claude API |
-| Structured data analysis | pandas |
-| Forecasting | LightGBM, scikit-learn, statsmodels |
-| RAG and retrieval | ChromaDB, sentence-transformers or Anthropic embeddings |
-| Visualisation | Plotly |
-| UI | Streamlit |
-| Testing | pytest |
+- No LLM integration yet (intentionally deterministic).
+- Planner is keyword-based and deterministic, not semantic.
+- Local file-based execution only; no deployment layer.
+- Retrieval quality depends on sample docs and local indexing assumptions.
 
-## Quick start
+## 13. Future improvements
 
-This section will become fully runnable once the implementation phases are complete.
-
-Planned local flow:
-
-1. Clone the repository.
-2. Create and activate a Python virtual environment.
-3. Install dependencies from `requirements.txt`.
-4. Copy `.env.example` to `.env` and add the required API credentials.
-5. Run the Streamlit app from `ui/app.py`.
-6. Rebuild the vector store with the RAG ingestion module when documents change.
-7. Run tests with `pytest`.
-
-## Implementation roadmap
-
-The build should be delivered through focused PRs in this order:
-
-| PR | Issue | Theme | Reason |
-|---:|---|---|---|
-| 1 | #1 | Repo scaffolding and dataset | Creates the foundation for every later issue |
-| 2 | #2 | LangGraph agent skeleton | Establishes the agent loop and tool interfaces |
-| 3 | #3 | Structured sales analysis | First real business capability |
-| 4 | #5 | Plotly visualisation | Makes analysis visible and UI-ready |
-| 5 | #4 | Forecasting | Adds the strongest data science layer |
-| 6 | #6 | RAG ingestion and retrieval | Creates the document intelligence backend |
-| 7 | #7 | Document search tool | Wires RAG into the agent |
-| 8 | #8 | Multi-step reasoning | Requires all real tools to exist first |
-| 9 | #9 | Streamlit chat UI | Presents the working agent to users |
-| 10 | #10 | README, architecture and demo notebook | Final portfolio packaging |
-
-See `plan.md` for the detailed work order, acceptance gates and PR-level implementation notes.
-
-## Portfolio positioning
-
-This project is intended to demonstrate:
-
-- practical agentic AI implementation
-- commercial analytics product thinking
-- structured data analysis through natural language
-- forecasting with validation and uncertainty bands
-- RAG over business documents
-- transparent tool use and explainable agent behaviour
-- a usable interface for non-technical users
-
-The final version should read as a portfolio-grade AI analytics assistant, not a generic chatbot.
+- Add optional LLM-backed planner/response synthesis behind a feature flag.
+- Improve planner robustness for broader query phrasing.
+- Add richer chart previews and downloadable artifacts.
+- Add evaluation harnesses for retrieval and forecasting quality.
+- Add deployment targets after deterministic baseline is finalized.
