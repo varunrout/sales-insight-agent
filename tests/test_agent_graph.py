@@ -32,6 +32,9 @@ def test_run_agent_with_trace_returns_expected_shape():
     assert isinstance(trace["iterations"], int)
     assert isinstance(trace["intermediate_outputs"], list)
     assert isinstance(trace["errors"], list)
+    assert isinstance(trace["parsed_intent"], dict)
+    assert trace["parsed_intent"]["steps"][0]["intent_type"] == "analysis"
+    assert trace["parsed_intent"]["steps"][0]["metric"] == "revenue"
 
 
 def test_simple_sales_query_routes_to_analyse_data():
@@ -75,6 +78,20 @@ def test_document_question_routes_to_search_documents():
 def test_planner_returns_ordered_tool_chain_for_analysis_plus_chart():
     assert plan_tool_calls("Analyse EMEA Q3 softness and show a chart of revenue by region.") == [
         "analyse_data",
+        "visualise",
+    ]
+
+
+def test_planner_still_handles_document_plus_forecast_with_parser():
+    assert plan_tool_calls("Search the docs for EMEA risks and forecast revenue for next month") == [
+        "search_documents",
+        "forecast",
+    ]
+
+
+def test_planner_routes_commentary_plus_chart_to_docs_then_visualise():
+    assert plan_tool_calls("Find the commentary on EMEA Q3 softness, then show a chart") == [
+        "search_documents",
         "visualise",
     ]
 
