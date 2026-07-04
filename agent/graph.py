@@ -69,7 +69,13 @@ ANALYSIS_KEYWORDS = {
     "analyse",
     "analyze",
     "analysis",
+    "soft",
     "softness",
+    "performance",
+    "happened",
+    "lost",
+    "excluding",
+    "without",
     "sales",
     "revenue",
     "margin",
@@ -114,6 +120,25 @@ def _contains_any(query: str, keywords: set[str]) -> bool:
     return False
 
 
+def _is_revenue_exclusion_or_risk_clause(clause: str) -> bool:
+    normalized_clause = clause.lower()
+    if "revenue" not in normalized_clause and "sales" not in normalized_clause:
+        return False
+    return any(
+        phrase in normalized_clause
+        for phrase in (
+            "lost region",
+            "lost regions",
+            "lost",
+            "lose ",
+            "excluding",
+            "exclude",
+            "without",
+            "at risk",
+        )
+    )
+
+
 def _split_query_steps(query: str) -> list[str]:
     clauses = [
         clause.strip()
@@ -128,6 +153,8 @@ def _route_clause_tool(clause: str) -> str | None:
         return "forecast"
     if _contains_any(clause, VISUALISE_KEYWORDS):
         return "visualise"
+    if _is_revenue_exclusion_or_risk_clause(clause):
+        return "analyse_data"
     if _contains_any(clause, DOCUMENT_KEYWORDS):
         return "search_documents"
     if _contains_any(clause, ANALYSIS_KEYWORDS):

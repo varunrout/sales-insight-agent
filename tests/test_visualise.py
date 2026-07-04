@@ -135,6 +135,27 @@ def test_top_products_by_units_chart_is_created(monkeypatch):
     assert chart_path.name == "top_4_products_by_units_sold.html"
 
 
+def test_emea_q3_softness_chart_is_created(monkeypatch):
+    _use_lightweight_chart_output(monkeypatch)
+
+    response = visualise("Analyse EMEA Q3 softness and show a chart")
+    chart_path = _chart_path_from_response(response)
+
+    assert "EMEA Q2 vs Q3 revenue by sales channel chart saved to" in response
+    assert chart_path.exists()
+    assert chart_path.name == "emea_q2_q3_revenue_by_sales_channel.html"
+
+
+def test_emea_q3_softness_chart_request_is_created(monkeypatch):
+    _use_lightweight_chart_output(monkeypatch)
+
+    response = visualise("Show a chart for EMEA Q3 softness")
+    chart_path = _chart_path_from_response(response)
+
+    assert "EMEA Q2 vs Q3 revenue by sales channel chart saved to" in response
+    assert chart_path.exists()
+
+
 def test_unsupported_chart_request_returns_graceful_message():
     response = visualise("Create a heatmap of salesperson onboarding scores.")
 

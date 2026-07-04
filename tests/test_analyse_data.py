@@ -69,6 +69,58 @@ def test_filtering_by_year_and_region_is_applied():
     assert "2025-12-31" in result
 
 
+def test_lost_regions_revenue_impact_works():
+    result = analyse_data("How much revenue can I get if LATAM and APAC are lost regions?")
+
+    assert "Revenue impact of lost or excluded regions" in result
+    assert "Total revenue:" in result
+    assert "Excluded/lost regions:" in result
+    assert "LATAM" in result
+    assert "APAC" in result
+    assert "Revenue lost / revenue at risk:" in result
+    assert "Retained revenue:" in result
+    assert "Percentage retained:" in result
+    assert "Percentage lost:" in result
+
+
+def test_revenue_excluding_regions_works():
+    result = analyse_data("Revenue excluding LATAM and APAC")
+
+    assert "Revenue impact of lost or excluded regions" in result
+    assert "Excluded/lost regions:" in result
+    assert "Revenue lost / revenue at risk:" in result
+    assert "Retained revenue:" in result
+    assert "I can answer structured sales questions" not in result
+
+
+def test_revenue_at_risk_regions_works():
+    result = analyse_data("How much revenue is at risk if LATAM and APAC are lost?")
+
+    assert "Revenue impact of lost or excluded regions" in result
+    assert "Revenue lost / revenue at risk:" in result
+    assert "Percentage lost:" in result
+
+
+def test_emea_q3_softness_analysis_works():
+    result = analyse_data("Analyse EMEA Q3 softness")
+
+    assert "EMEA Q3 softness analysis" in result
+    assert "EMEA Q2 revenue:" in result
+    assert "EMEA Q3 revenue:" in result
+    assert "Absolute change:" in result
+    assert "Percentage change:" in result
+    assert "Channel-level breakdown:" in result
+    assert "Partner" in result
+
+
+def test_why_emea_was_soft_in_q3_works():
+    result = analyse_data("Why was EMEA soft in Q3?")
+
+    assert "EMEA Q3 softness analysis" in result
+    assert "Q3 softness detected" in result
+    assert "Partner" in result
+
+
 def test_product_category_filter_does_not_cross_filter_customer_segment():
     data = analyse_module._load_sales_data(analyse_module.DATA_PATH)
     expected_rows = data[data["product_category"] == "Enterprise Suite"]

@@ -87,6 +87,35 @@ def test_run_agent_executes_analysis_plus_visualise_chain():
     assert "Step 2 (visualise):" in trace["answer"]
 
 
+def test_lost_regions_query_routes_to_analysis_and_returns_calculation():
+    trace = run_agent_with_trace("How much revenue can I get if LATAM and APAC are lost regions?")
+
+    assert trace["tools_used"] == ["analyse_data"]
+    assert "Revenue impact of lost or excluded regions" in trace["answer"]
+    assert "Revenue lost / revenue at risk:" in trace["answer"]
+    assert "Retained revenue:" in trace["answer"]
+    assert "I can answer structured sales questions" not in trace["answer"]
+
+
+def test_revenue_at_risk_query_routes_to_analysis_not_documents():
+    trace = run_agent_with_trace("How much revenue is at risk if LATAM and APAC are lost?")
+
+    assert trace["tools_used"] == ["analyse_data"]
+    assert "Revenue lost / revenue at risk:" in trace["answer"]
+
+
+def test_emea_q3_softness_plus_chart_returns_useful_tool_outputs():
+    trace = run_agent_with_trace("Analyse EMEA Q3 softness and show a chart")
+
+    assert trace["tools_used"] == ["analyse_data", "visualise"]
+    assert "Step 1 (analyse_data):" in trace["answer"]
+    assert "EMEA Q3 softness analysis" in trace["answer"]
+    assert "Step 2 (visualise):" in trace["answer"]
+    assert "EMEA Q2 vs Q3 revenue by sales channel chart saved to" in trace["answer"]
+    assert "I can answer structured sales questions" not in trace["answer"]
+    assert "I can create charts for revenue" not in trace["answer"]
+
+
 def test_run_agent_executes_search_documents_plus_forecast_chain():
     trace = run_agent_with_trace(
         "Search the docs for EMEA risks and forecast revenue for next month."

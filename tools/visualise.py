@@ -39,6 +39,8 @@ def visualise(query: str) -> str:
 
     normalized_query = query.lower()
 
+    if _asks_emea_q3_chart(normalized_query):
+        return _emea_q2_q3_revenue_by_channel_chart(data)
     if _asks_month_over_month_revenue(normalized_query):
         return _monthly_revenue_chart(data, month_over_month=True)
     if _asks_monthly_revenue(normalized_query):
@@ -110,6 +112,22 @@ def _asks_top_products_by_units(normalized_query: str) -> bool:
     )
 
 
+def _asks_emea_q3_chart(normalized_query: str) -> bool:
+    if "emea" not in normalized_query or "q3" not in normalized_query:
+        return False
+    return any(
+        term in normalized_query
+        for term in (
+            "soft",
+            "softness",
+            "performance",
+            "what happened",
+            "q3 vs q2",
+            "vs q2",
+        )
+    )
+
+
 def _parse_top_n(query: str, default: int = 5) -> int:
     match = re.search(r"\btop\s+(\d{1,2})\b", query.lower())
     if not match:
@@ -175,6 +193,40 @@ def _monthly_revenue_chart(data: pd.DataFrame, month_over_month: bool) -> str:
         labels={"month": "Month", "revenue": "Revenue"},
     )
     return _save_chart(fig, "monthly_revenue.html", "Monthly revenue")
+
+
+def _emea_q2_q3_revenue_by_channel_chart(data: pd.DataFrame) -> str:
+    scoped = data[
+        (data["region"] == "EMEA")
+        & (data["date"].dt.quarter.isin([2, 3]))
+    ].copy()
+    if scoped.empty:
+        return "No EMEA Q2 or Q3 records were found for charting."
+
+    scoped["quarter"] = "Q" + scoped["date"].dt.quarter.astype(str)
+    grouped = (
+        scoped.groupby(["sales_channel", "quarter"], as_index=False)["revenue"]
+        .sum()
+        .sort_values(["sales_channel", "quarter"])
+    )
+    fig = px.bar(
+        grouped,
+        x="sales_channel",
+        y="revenue",
+        color="quarter",
+        barmode="group",
+        title="EMEA Q2 vs Q3 revenue by sales channel",
+        labels={
+            "sales_channel": "Sales Channel",
+            "revenue": "Revenue",
+            "quarter": "Quarter",
+        },
+    )
+    return _save_chart(
+        fig,
+        "emea_q2_q3_revenue_by_sales_channel.html",
+        "EMEA Q2 vs Q3 revenue by sales channel",
+    )
 
 
 def _average_gross_margin_by_channel_chart(data: pd.DataFrame) -> str:
