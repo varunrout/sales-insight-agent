@@ -2,6 +2,7 @@ from collections.abc import Callable
 import re
 from typing import Any
 
+from agent.intent import IntentStep, parse_intent
 from agent.state import AgentState
 from tools.analyse_data import analyse_data
 from tools.forecast import forecast
@@ -162,10 +163,23 @@ def _route_clause_tool(clause: str) -> str | None:
     return None
 
 
+def _tool_for_intent_step(step: IntentStep) -> str | None:
+    if step.intent_type == "analysis":
+        return "analyse_data"
+    if step.intent_type == "visualisation":
+        return "visualise"
+    if step.intent_type == "forecast":
+        return "forecast"
+    if step.intent_type == "document_search":
+        return "search_documents"
+    return None
+
+
 def plan_tool_calls(query: str) -> list[str]:
     planned: list[str] = []
-    for clause in _split_query_steps(query):
-        tool_name = _route_clause_tool(clause)
+    parsed_intent = parse_intent(query)
+    for step in parsed_intent.steps:
+        tool_name = _tool_for_intent_step(step)
         if tool_name and tool_name not in planned:
             planned.append(tool_name)
     return planned
@@ -272,6 +286,7 @@ def run_agent(query: str) -> str:
 def run_agent_with_trace(query: str) -> dict[str, Any]:
     state = _initial_state(query)
     user_query = state["messages"][-1]["content"]
+    parsed_intent = parse_intent(user_query)
     planned_tools, plan_warning = _limit_tool_plan(plan_tool_calls(user_query))
     if plan_warning:
         state["errors"].append(plan_warning)
@@ -301,6 +316,7 @@ def run_agent_with_trace(query: str) -> dict[str, Any]:
         "errors": state["errors"],
         "tool_calls": state["tool_calls"],
         "tool_results": state["tool_results"],
+        "parsed_intent": parsed_intent.to_dict(),
     }
 
 
