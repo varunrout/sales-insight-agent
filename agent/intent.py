@@ -107,7 +107,9 @@ DOCUMENT_TERMS = {
     "says about",
     "say about",
     "mentions",
+    "mentioned",
     "brief",
+    "commentary",
 }
 
 

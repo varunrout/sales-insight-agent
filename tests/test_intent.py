@@ -78,12 +78,35 @@ def test_parse_document_request():
     assert step.output_type == "document_evidence"
 
 
+def test_parse_commentary_request_as_document_search():
+    parsed = parse_intent("Find the commentary on EMEA Q3 softness")
+    step = parsed.steps[0]
+
+    assert step.intent_type == "document_search"
+    assert step.output_type == "document_evidence"
+    assert step.filters == {"region": ["EMEA"]}
+    assert step.comparison == "q3_vs_q2"
+    assert step.analysis_type == "softness_diagnostic"
+
+
 def test_parse_analysis_plus_chart_compound():
     parsed = parse_intent("Analyse EMEA Q3 softness and show a chart")
 
     assert parsed.is_compound is True
     assert [step.intent_type for step in parsed.steps] == ["analysis", "visualisation"]
     assert parsed.steps[0].analysis_type == "softness_diagnostic"
+    assert parsed.steps[1].output_type == "chart"
+
+
+def test_parse_commentary_plus_chart_compound():
+    parsed = parse_intent("Find the commentary on EMEA Q3 softness, then show a chart")
+
+    assert parsed.is_compound is True
+    assert [step.intent_type for step in parsed.steps] == [
+        "document_search",
+        "visualisation",
+    ]
+    assert parsed.steps[0].output_type == "document_evidence"
     assert parsed.steps[1].output_type == "chart"
 
 
@@ -94,6 +117,25 @@ def test_parse_document_plus_forecast_compound():
     assert [step.intent_type for step in parsed.steps] == ["document_search", "forecast"]
     assert parsed.steps[0].filters == {"region": ["EMEA"]}
     assert parsed.steps[1].metric == "revenue"
+
+
+def test_parse_risk_commentary_as_document_search():
+    parsed = parse_intent("Find risk commentary on EMEA")
+    step = parsed.steps[0]
+
+    assert step.intent_type == "document_search"
+    assert step.output_type == "document_evidence"
+    assert step.analysis_type == "risk"
+
+
+def test_revenue_at_risk_remains_analysis():
+    parsed = parse_intent("Revenue at risk if LATAM is lost")
+    step = parsed.steps[0]
+
+    assert step.intent_type == "analysis"
+    assert step.metric == "revenue"
+    assert step.exclusions == {"region": ["LATAM"]}
+    assert step.analysis_type == "exclusion_impact"
 
 
 def test_parse_exposure_as_risk_or_concentration():

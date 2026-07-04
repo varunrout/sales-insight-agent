@@ -89,6 +89,13 @@ def test_planner_still_handles_document_plus_forecast_with_parser():
     ]
 
 
+def test_planner_routes_commentary_plus_chart_to_docs_then_visualise():
+    assert plan_tool_calls("Find the commentary on EMEA Q3 softness, then show a chart") == [
+        "search_documents",
+        "visualise",
+    ]
+
+
 def test_run_agent_executes_analysis_plus_visualise_chain():
     trace = run_agent_with_trace("Analyse EMEA Q3 softness and show a chart of revenue by region.")
 
