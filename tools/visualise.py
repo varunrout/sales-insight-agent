@@ -6,6 +6,7 @@ import plotly.express as px
 
 import config
 from tools.data_loader import load_sales_data
+from tools.filters import apply_filters, filter_note
 
 TOOL_NAME = "visualise"
 DATA_PATH = config.DATA_PATH
@@ -36,6 +37,17 @@ def visualise(query: str) -> str:
     if isinstance(data, str):
         return data
 
+    # Filter to the same scope analyse_data would use for this query, so a
+    # chart of "revenue by channel in EMEA" plots EMEA, not the whole dataset.
+    scoped = apply_filters(data, query)
+    result = _route_chart(scoped, query)
+
+    if "chart saved to" in result and len(scoped) != len(data):
+        result = f"{filter_note(scoped)}\n{result}"
+    return result
+
+
+def _route_chart(data: pd.DataFrame, query: str) -> str:
     normalized_query = query.lower()
 
     if _asks_emea_q3_chart(normalized_query):
