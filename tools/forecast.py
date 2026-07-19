@@ -57,6 +57,14 @@ def forecast(query: str) -> str:
     display_rows = _format_future_rows(future, metric, output_frequency)
 
     metric_label = metric.replace("_", " ")
+    projected_daily = float(future["p50"].mean())
+    beats = evaluation["skill_vs_seasonal"] < 1
+    finding = (
+        f"Finding: {metric_label} is projected around {_format_number(projected_daily)} per day "
+        f"over the next {horizon_days} days; the model "
+        f"{'beats' if beats else 'does not beat'} the seasonal-naive baseline "
+        f"(skill {evaluation['skill_vs_seasonal']:.2f})."
+    )
     return "\n".join(
         [
             f"Forecast for {metric_label}",
@@ -72,6 +80,7 @@ def forecast(query: str) -> str:
             f"(target 80%, n={evaluation['n_test']})",
             "Future forecast rows:",
             display_rows,
+            finding,
         ]
     )
 

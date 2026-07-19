@@ -145,6 +145,10 @@ def _parse_top_n(query: str, default: int = 5) -> int:
     return max(1, min(int(match.group(1)), 20))
 
 
+def _with_finding(saved_message: str, finding: str) -> str:
+    return f"{finding}\n{saved_message}"
+
+
 def _save_chart(fig, filename: str, description: str) -> str:
     CHART_OUTPUT_PATH.mkdir(parents=True, exist_ok=True)
     chart_path = CHART_OUTPUT_PATH / filename
@@ -166,10 +170,11 @@ def _revenue_bar_chart(data: pd.DataFrame, dimension: str) -> str:
         title=f"Revenue by {label}",
         labels={dimension: label.title(), "revenue": "Revenue"},
     )
-    return _save_chart(
-        fig,
-        f"revenue_by_{dimension}.html",
-        f"Revenue by {label}",
+    leader = grouped.iloc[0]
+    finding = f"Finding: {leader[dimension]} leads revenue at {leader['revenue']:,.0f}."
+    return _with_finding(
+        _save_chart(fig, f"revenue_by_{dimension}.html", f"Revenue by {label}"),
+        finding,
     )
 
 
@@ -252,10 +257,18 @@ def _average_gross_margin_by_channel_chart(data: pd.DataFrame) -> str:
             "gross_margin": "Average Gross Margin",
         },
     )
-    return _save_chart(
-        fig,
-        "average_gross_margin_by_sales_channel.html",
-        "Average gross margin by sales channel",
+    leader = grouped.iloc[0]
+    finding = (
+        f"Finding: {leader['sales_channel']} has the highest average gross margin "
+        f"at {leader['gross_margin']:.1%}."
+    )
+    return _with_finding(
+        _save_chart(
+            fig,
+            "average_gross_margin_by_sales_channel.html",
+            "Average gross margin by sales channel",
+        ),
+        finding,
     )
 
 
@@ -275,8 +288,13 @@ def _top_products_chart(data: pd.DataFrame, metric: str, query: str) -> str:
         title=f"Top {top_n} products by {metric_label}",
         labels={"product_name": "Product", metric: metric_label.title()},
     )
-    return _save_chart(
-        fig,
-        f"top_{top_n}_products_by_{metric}.html",
-        f"Top {top_n} products by {metric_label}",
+    leader = grouped.iloc[0]
+    finding = f"Finding: {leader['product_name']} leads {metric_label} at {leader[metric]:,.0f}."
+    return _with_finding(
+        _save_chart(
+            fig,
+            f"top_{top_n}_products_by_{metric}.html",
+            f"Top {top_n} products by {metric_label}",
+        ),
+        finding,
     )
