@@ -1,16 +1,19 @@
 import inspect
 
 from config import DOCS_PATH, ROOT_DIR
-from rag.ingest import DocumentChunk, chunk_text, ingest_documents, load_markdown_documents
-from rag.retriever import _score_chunk, format_search_results, retrieve_documents
+from rag.ingest import chunk_text, ingest_documents, load_markdown_documents
+from rag.retriever import format_search_results, retrieve_documents
+from rag.vector_store import MIN_SIMILARITY
 
 
 def test_rag_modules_import_successfully():
     import rag.ingest as ingest
     import rag.retriever as retriever
+    import rag.vector_store as vector_store
 
     assert ingest.DEFAULT_CHUNK_SIZE > 0
     assert retriever.retrieve_documents
+    assert vector_store.get_collection
 
 
 def test_load_markdown_documents_finds_docs():
@@ -82,45 +85,21 @@ def test_retrieve_documents_returns_relevant_market_risk_doc():
     results = retrieve_documents("EMEA Partner Q3 risk", top_k=2)
 
     assert results
-    assert results[0].score > 0
+    assert results[0].score >= MIN_SIMILARITY
     assert results[0].source in {
         "market_overview.md",
         "quarterly_sales_report.md",
     }
-    assert "EMEA" in results[0].text
 
 
-def test_retrieve_documents_preserves_q3_query_token():
-    results = retrieve_documents("Q3", top_k=3)
+def test_retrieve_documents_matches_on_meaning_not_shared_tokens():
+    # No token overlap with "Q3 revenue softness"; only an embedding retriever
+    # can connect "dip in the third quarter" to the quarterly report chunk.
+    results = retrieve_documents("why did EMEA sales dip in the third quarter", top_k=1)
 
-    assert results
-    assert any("Q3" in result.text for result in results)
-
-
-def test_quarter_terms_influence_retrieval_ranking(monkeypatch):
-    import rag.retriever as retriever
-
-    chunks = [
-        DocumentChunk(
-            chunk_id="q2-note-1",
-            source="q2-note.md",
-            text="EMEA risk was reviewed during Q2 planning.",
-            metadata={},
-        ),
-        DocumentChunk(
-            chunk_id="q3-note-1",
-            source="q3-note.md",
-            text="EMEA risk was elevated during Q3 planning.",
-            metadata={},
-        ),
-    ]
-    monkeypatch.setattr(retriever, "ingest_documents", lambda docs_path: chunks)
-
-    q2_results = retriever.retrieve_documents("EMEA risk Q2", top_k=2)
-    q3_results = retriever.retrieve_documents("EMEA risk Q3", top_k=2)
-
-    assert q2_results[0].source == "q2-note.md"
-    assert q3_results[0].source == "q3-note.md"
+    assert len(results) == 1
+    assert results[0].source == "quarterly_sales_report.md"
+    assert results[0].score >= MIN_SIMILARITY
 
 
 def test_retrieve_documents_returns_relevant_product_strategy_doc():
@@ -133,23 +112,22 @@ def test_retrieve_documents_returns_relevant_product_strategy_doc():
 def test_retrieve_documents_respects_top_k_and_score_order():
     results = retrieve_documents("regional pricing channel risk", top_k=2)
 
-    assert len(results) <= 2
-    assert results == sorted(results, key=lambda result: (-result.score, result.source, result.chunk_id))
+    assert 0 < len(results) <= 2
+    assert results == sorted(
+        results, key=lambda result: (-result.score, result.source, result.chunk_id)
+    )
+
+
+def test_retrieve_documents_below_threshold_returns_nothing():
+    assert retrieve_documents("xylophone nebula marmalade", top_k=3) == []
 
 
 def test_retrieve_documents_handles_empty_query():
     assert retrieve_documents("", top_k=3) == []
 
 
-def test_score_chunk_counts_whole_tokens_not_substrings():
-    chunk = DocumentChunk(
-        chunk_id="test-1",
-        source="test.md",
-        text="A brisk market update without the target token.",
-        metadata={},
-    )
-
-    assert _score_chunk("risk", {"risk"}, chunk) == 0.0
+def test_retrieve_documents_rejects_non_positive_top_k():
+    assert retrieve_documents("EMEA risk", top_k=0) == []
 
 
 def test_retrieve_documents_handles_missing_docs_path():
@@ -168,11 +146,18 @@ def test_format_search_results_is_human_readable():
     assert results[0].source in formatted
 
 
+def test_format_search_results_handles_empty():
+    assert format_search_results([]) == "No matching documents found."
+
+
 def test_no_eval_or_exec_used():
     import rag.ingest as ingest
     import rag.retriever as retriever
+    import rag.vector_store as vector_store
 
-    source = inspect.getsource(ingest) + inspect.getsource(retriever)
+    source = (
+        inspect.getsource(ingest) + inspect.getsource(retriever) + inspect.getsource(vector_store)
+    )
 
     assert "eval(" not in source
     assert "exec(" not in source

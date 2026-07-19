@@ -7,3 +7,6 @@ rag/chroma_db/
 outputs/
 models/
 *.pyc
+.ruff_cache/
+.coverage
+htmlcov/

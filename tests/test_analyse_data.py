@@ -1,5 +1,5 @@
-from pathlib import Path
 import ast
+from pathlib import Path
 
 import pandas as pd
 
@@ -27,9 +27,7 @@ def test_north_america_ranks_highest_for_revenue_by_region():
 
 
 def test_emea_partner_q3_vs_q2_returns_q3_softness():
-    result = analyse_data(
-        "How did EMEA Partner revenue and conversion rate perform in Q3 vs Q2?"
-    )
+    result = analyse_data("How did EMEA Partner revenue and conversion rate perform in Q3 vs Q2?")
 
     assert "EMEA Partner Q3 vs Q2 comparison" in result
     assert "Q3 softness detected" in result

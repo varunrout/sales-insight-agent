@@ -1,9 +1,8 @@
-from pathlib import Path
 import ast
+from pathlib import Path
 
 from tools import visualise as visualise_module
 from tools.visualise import visualise
-
 
 TEST_CHART_OUTPUT_PATH = Path("outputs") / "test_charts"
 

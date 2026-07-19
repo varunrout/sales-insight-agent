@@ -1,12 +1,11 @@
 import re
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Iterable
 
 import pandas as pd
 
 import config
 from tools.data_loader import load_sales_data
-
 
 TOOL_NAME = "analyse_data"
 DATA_PATH = config.DATA_PATH
@@ -104,9 +103,7 @@ def _apply_filters(data: pd.DataFrame, query: str) -> pd.DataFrame:
     if year_match:
         filtered = filtered[filtered["date"].dt.year == int(year_match.group(1))]
 
-    matched_product_categories = _matching_values(
-        filtered, "product_category", normalized_query
-    )
+    matched_product_categories = _matching_values(filtered, "product_category", normalized_query)
     if matched_product_categories:
         filtered = filtered[filtered["product_category"].isin(matched_product_categories)]
 
@@ -118,21 +115,15 @@ def _apply_filters(data: pd.DataFrame, query: str) -> pd.DataFrame:
     return filtered
 
 
-def _matching_values(
-    data: pd.DataFrame, column: str, normalized_query: str
-) -> list[str]:
+def _matching_values(data: pd.DataFrame, column: str, normalized_query: str) -> list[str]:
     return [
         value
-        for value in sorted(
-            data[column].dropna().unique(), key=lambda item: -len(str(item))
-        )
+        for value in sorted(data[column].dropna().unique(), key=lambda item: -len(str(item)))
         if re.search(rf"\b{re.escape(str(value).lower())}\b", normalized_query)
     ]
 
 
-def _filter_by_known_values(
-    data: pd.DataFrame, column: str, normalized_query: str
-) -> pd.DataFrame:
+def _filter_by_known_values(data: pd.DataFrame, column: str, normalized_query: str) -> pd.DataFrame:
     matches = _matching_values(data, column, normalized_query)
     if not matches:
         return data
@@ -248,9 +239,7 @@ def _filter_note(data: pd.DataFrame) -> str:
     return f"Scope: {len(data):,} rows from {start} to {end}."
 
 
-def _format_ranked_rows(
-    title: str, rows: Iterable[tuple[str, float]], formatter
-) -> str:
+def _format_ranked_rows(title: str, rows: Iterable[tuple[str, float]], formatter) -> str:
     lines = [title]
     for rank, (label, value) in enumerate(rows, start=1):
         lines.append(f"{rank}. {label}: {formatter(value)}")
@@ -323,14 +312,13 @@ def _average_gross_margin_by_channel(data: pd.DataFrame) -> str:
         .sort_values("gross_margin", ascending=False)
     )
     strongest = grouped.iloc[0]
-    rows = list(
-        grouped[["sales_channel", "gross_margin"]].itertuples(index=False, name=None)
-    )
+    rows = list(grouped[["sales_channel", "gross_margin"]].itertuples(index=False, name=None))
     return "\n".join(
         [
             "Average gross margin by sales channel",
             _filter_note(data),
-            f"Strongest channel: {strongest['sales_channel']} at {_format_percent(strongest['gross_margin'])}.",
+            f"Strongest channel: {strongest['sales_channel']} at "
+            f"{_format_percent(strongest['gross_margin'])}.",
             _format_ranked_rows("Results:", rows, _format_percent),
         ]
     )
@@ -380,10 +368,7 @@ def _month_over_month_revenue(data: pd.DataFrame) -> str:
 
 
 def _emea_q3_softness(data: pd.DataFrame) -> str:
-    scoped = data[
-        (data["region"] == "EMEA")
-        & (data["date"].dt.quarter.isin([2, 3]))
-    ].copy()
+    scoped = data[(data["region"] == "EMEA") & (data["date"].dt.quarter.isin([2, 3]))].copy()
     if scoped.empty:
         return "No EMEA Q2 or Q3 records were found."
 
@@ -480,7 +465,9 @@ def _emea_partner_q3_vs_q2(data: pd.DataFrame) -> str:
     q3_conversion = values.loc["Q3", "conversion_rate"]
     revenue_change = None if q2_revenue == 0 else (q3_revenue - q2_revenue) / q2_revenue
     conversion_change = q3_conversion - q2_conversion
-    softness = "Q3 softness detected" if q3_revenue < q2_revenue else "No Q3 revenue softness detected"
+    softness = (
+        "Q3 softness detected" if q3_revenue < q2_revenue else "No Q3 revenue softness detected"
+    )
     revenue_change_text = (
         "n/a because Q2 revenue is zero"
         if revenue_change is None

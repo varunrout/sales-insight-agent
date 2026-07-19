@@ -1,5 +1,5 @@
-from collections.abc import Callable
 import re
+from collections.abc import Callable
 from typing import Any
 
 from agent.intent import IntentStep, parse_intent
@@ -9,13 +9,10 @@ from tools.forecast import forecast
 from tools.search_documents import search_documents
 from tools.visualise import visualise
 
-
 MAX_ITERATIONS = 5
 MAX_TOOL_CALLS = 5
 UNSUPPORTED_QUERY_MESSAGE = "No supported tool route was found for this query."
-GENERIC_TOOL_FAILURE_MESSAGE = (
-    "I could not complete the request with the selected tool yet."
-)
+GENERIC_TOOL_FAILURE_MESSAGE = "I could not complete the request with the selected tool yet."
 
 ToolFunction = Callable[[str], str]
 
@@ -318,38 +315,3 @@ def run_agent_with_trace(query: str) -> dict[str, Any]:
         "tool_results": state["tool_results"],
         "parsed_intent": parsed_intent.to_dict(),
     }
-
-
-def build_graph() -> Any:
-    try:
-        from langgraph.graph import END, StateGraph
-    except ImportError:
-        return None
-
-    graph = StateGraph(AgentState)
-
-    def route_node(state: AgentState) -> AgentState:
-        query = state["messages"][-1]["content"]
-        tool_name = route_tool(query)
-        state["tool_calls"].append({"name": tool_name, "query": query})
-        return state
-
-    def tool_node(state: AgentState) -> AgentState:
-        query = state["messages"][-1]["content"]
-        tool_name = state["tool_calls"][-1]["name"]
-        tool_result = execute_tool(tool_name, query)
-        state["tool_results"].append(tool_result)
-        if tool_result["tool"]:
-            state["last_tools_used"].append(tool_result["tool"])
-        if tool_result["error"]:
-            state["errors"].append(tool_result["error"])
-        state["iterations"] += 1
-        state["final_answer"] = _build_final_answer(state["tool_results"])
-        return state
-
-    graph.add_node("route", route_node)
-    graph.add_node("tool", tool_node)
-    graph.set_entry_point("route")
-    graph.add_edge("route", "tool")
-    graph.add_edge("tool", END)
-    return graph.compile()
