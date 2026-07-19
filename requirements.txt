@@ -1,15 +1,7 @@
-langgraph
-langchain
-langchain-core
-langchain-anthropic
 chromadb
-pandas
 numpy
-lightgbm
-statsmodels
-streamlit
+pandas
 plotly
-python-dotenv
 scikit-learn
+streamlit
 pytest
-sentence-transformers

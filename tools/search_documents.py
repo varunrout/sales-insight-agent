@@ -1,6 +1,5 @@
 from rag.retriever import format_search_results, retrieve_documents
 
-
 TOOL_NAME = "search_documents"
 
 

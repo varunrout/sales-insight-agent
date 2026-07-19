@@ -10,7 +10,6 @@ def test_config_paths_are_path_objects():
         config.QUESTIONS_PATH,
         config.VECTOR_STORE_PATH,
         config.CHART_OUTPUT_PATH,
-        config.MODEL_OUTPUT_PATH,
     ]
 
     assert all(isinstance(path, Path) for path in path_settings)
@@ -20,3 +19,9 @@ def test_config_source_paths_are_importable_and_existing():
     assert config.DATA_PATH.exists()
     assert config.DOCS_PATH.exists()
     assert config.QUESTIONS_PATH.exists()
+
+
+def test_config_has_no_dead_model_scaffolding():
+    # The project does not call an LLM; these must not creep back in.
+    for removed in ("MODEL_NAME", "MODEL_TEMPERATURE", "MODEL_OUTPUT_PATH"):
+        assert not hasattr(config, removed), f"{removed} should be removed from config"
