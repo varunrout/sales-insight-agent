@@ -6,6 +6,7 @@ import pandas as pd
 
 import config
 from tools.data_loader import load_sales_data
+from tools.filters import apply_filters, filter_note, matching_values
 
 TOOL_NAME = "analyse_data"
 DATA_PATH = config.DATA_PATH
@@ -96,43 +97,11 @@ def _load_sales_data(data_path: Path) -> pd.DataFrame | str:
 
 
 def _apply_filters(data: pd.DataFrame, query: str) -> pd.DataFrame:
-    filtered = data.copy()
-    normalized_query = query.lower()
-
-    year_match = re.search(r"\b(20\d{2})\b", normalized_query)
-    if year_match:
-        filtered = filtered[filtered["date"].dt.year == int(year_match.group(1))]
-
-    matched_product_categories = _matching_values(filtered, "product_category", normalized_query)
-    if matched_product_categories:
-        filtered = filtered[filtered["product_category"].isin(matched_product_categories)]
-
-    for column in ("region", "sales_channel", "customer_segment"):
-        if column == "customer_segment" and matched_product_categories:
-            continue
-        filtered = _filter_by_known_values(filtered, column, normalized_query)
-
-    return filtered
-
-
-def _matching_values(data: pd.DataFrame, column: str, normalized_query: str) -> list[str]:
-    return [
-        value
-        for value in sorted(data[column].dropna().unique(), key=lambda item: -len(str(item)))
-        if re.search(rf"\b{re.escape(str(value).lower())}\b", normalized_query)
-    ]
-
-
-def _filter_by_known_values(data: pd.DataFrame, column: str, normalized_query: str) -> pd.DataFrame:
-    matches = _matching_values(data, column, normalized_query)
-    if not matches:
-        return data
-    return data[data[column].isin(matches)]
+    return apply_filters(data, query)
 
 
 def _regions_in_query(data: pd.DataFrame, query: str) -> list[str]:
-    normalized_query = query.lower()
-    return _matching_values(data, "region", normalized_query)
+    return matching_values(data, "region", query.lower())
 
 
 def _asks_lost_or_excluded_region_revenue(normalized_query: str) -> bool:
@@ -234,9 +203,7 @@ def _format_signed_money(value: float) -> str:
 
 
 def _filter_note(data: pd.DataFrame) -> str:
-    start = data["date"].min().date()
-    end = data["date"].max().date()
-    return f"Scope: {len(data):,} rows from {start} to {end}."
+    return filter_note(data)
 
 
 def _format_ranked_rows(title: str, rows: Iterable[tuple[str, float]], formatter) -> str:
