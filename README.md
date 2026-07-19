@@ -64,6 +64,7 @@ in one chat workflow suitable for analyst and stakeholder demos.
 - Forecasting for revenue, units sold, and new customers.
 - Plotly chart generation saved as local HTML under `outputs/charts/`.
 - Embedding-based semantic document retrieval over the documents in `data/docs/`, backed by a persistent Chroma vector store.
+- Consistent scope across tools: analysis, charts and forecasts apply the same query filters (e.g. "in EMEA", "for 2025", "excluding LATAM"), so they never silently disagree on which rows a question covers.
 - Graceful unsupported-query and partial-failure handling.
 
 ## 4. Architecture
