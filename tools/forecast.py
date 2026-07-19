@@ -8,6 +8,7 @@ from sklearn.metrics import mean_absolute_error
 
 import config
 from tools.data_loader import load_sales_data
+from tools.filters import apply_filters, filter_note
 
 TOOL_NAME = "forecast"
 DATA_PATH = config.DATA_PATH
@@ -31,12 +32,18 @@ def forecast(query: str) -> str:
     if isinstance(data, str):
         return data
 
+    # Forecast the scope the user asked about: "forecast EMEA revenue" should
+    # forecast EMEA, not the global total.
+    scoped = apply_filters(data, query)
+    if scoped.empty:
+        return "No sales records matched the requested filters, so there is nothing to forecast."
+
     horizon_days = _parse_horizon_days(query)
     output_frequency = _parse_output_frequency(query)
-    series = _aggregate_daily(data, metric)
+    series = _aggregate_daily(scoped, metric)
 
     if len(series) < 90:
-        return "Not enough historical data to produce a reliable forecast."
+        return "Not enough historical data to produce a reliable forecast for the requested scope."
 
     model_result = _fit_backtest_model(series, metric)
     evaluation = _evaluate_backtest(series, metric)
@@ -55,6 +62,7 @@ def forecast(query: str) -> str:
             f"Forecast for {metric_label}",
             f"Horizon: {horizon_days} days",
             f"Output frequency: {output_frequency}",
+            *([filter_note(scoped)] if len(scoped) != len(data) else []),
             f"Backtest MAE: {_format_number(model_result['mae'])}",
             f"Backtest RMSE: {_format_number(model_result['rmse'])}",
             f"Seasonal-naive (lag-7) MAE: {_format_number(evaluation['seasonal_naive_mae'])}",

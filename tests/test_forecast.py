@@ -168,3 +168,23 @@ def test_evaluate_metric_rejects_unsupported_metric():
 
     assert isinstance(outcome, str)
     assert "I can forecast" in outcome
+
+
+def test_forecast_respects_region_filter_scope():
+    from tools.analyse_data import _apply_filters, _load_sales_data
+
+    query = "Forecast revenue for the next 30 days in EMEA"
+    data = _load_sales_data(__import__("config").DATA_PATH)
+    scoped_rows = len(_apply_filters(data, query))
+
+    result = forecast(query)
+
+    assert "Forecast for revenue" in result
+    assert f"Scope: {scoped_rows:,} rows" in result
+
+
+def test_forecast_global_query_has_no_scope_note():
+    result = forecast("Forecast revenue for the next 30 days.")
+
+    assert "Forecast for revenue" in result
+    assert "Scope:" not in result
