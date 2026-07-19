@@ -1,0 +1,10 @@
+[
+  {"query": "What risks does the market overview mention for EMEA and Marketplace?", "relevant_sources": ["market_overview.md"]},
+  {"query": "regional pricing and channel risk", "relevant_sources": ["market_overview.md"]},
+  {"query": "EMEA Q3 revenue softness commentary", "relevant_sources": ["quarterly_sales_report.md"]},
+  {"query": "quarterly sales performance by region", "relevant_sources": ["quarterly_sales_report.md"]},
+  {"query": "what does the product strategy brief recommend", "relevant_sources": ["product_strategy_brief.md"]},
+  {"query": "product margin strategy and enterprise discounting", "relevant_sources": ["product_strategy_brief.md"]},
+  {"query": "why did EMEA sales dip in the third quarter", "relevant_sources": ["quarterly_sales_report.md", "market_overview.md"]},
+  {"query": "APAC growth and demand outlook", "relevant_sources": ["market_overview.md", "product_strategy_brief.md"]}
+]

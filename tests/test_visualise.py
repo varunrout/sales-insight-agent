@@ -176,3 +176,30 @@ def test_visualise_does_not_use_eval_or_exec():
     for node in ast.walk(tree):
         if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
             assert node.func.id not in {"eval", "exec"}
+
+
+def test_visualise_scopes_to_the_same_rows_as_analyse_data():
+    from tools.analyse_data import _apply_filters, _load_sales_data
+
+    query = "Show a chart of revenue by sales channel in EMEA"
+    data = _load_sales_data(__import__("config").DATA_PATH)
+    scoped_rows = len(_apply_filters(data, query))
+
+    result = visualise(query)
+
+    assert "chart saved to" in result
+    assert f"Scope: {scoped_rows:,} rows" in result
+
+
+def test_visualise_unfiltered_query_has_no_scope_note():
+    result = visualise("Show a chart of revenue by region")
+
+    assert "chart saved to" in result
+    assert "Scope:" not in result
+
+
+def test_visualise_excludes_named_region():
+    result = visualise("Show a chart of revenue by region excluding LATAM")
+
+    assert "chart saved to" in result
+    assert "Scope:" in result

@@ -6,6 +6,7 @@ import pandas as pd
 
 import config
 from tools.data_loader import load_sales_data
+from tools.filters import apply_filters, filter_note, matching_values
 
 TOOL_NAME = "analyse_data"
 DATA_PATH = config.DATA_PATH
@@ -96,43 +97,11 @@ def _load_sales_data(data_path: Path) -> pd.DataFrame | str:
 
 
 def _apply_filters(data: pd.DataFrame, query: str) -> pd.DataFrame:
-    filtered = data.copy()
-    normalized_query = query.lower()
-
-    year_match = re.search(r"\b(20\d{2})\b", normalized_query)
-    if year_match:
-        filtered = filtered[filtered["date"].dt.year == int(year_match.group(1))]
-
-    matched_product_categories = _matching_values(filtered, "product_category", normalized_query)
-    if matched_product_categories:
-        filtered = filtered[filtered["product_category"].isin(matched_product_categories)]
-
-    for column in ("region", "sales_channel", "customer_segment"):
-        if column == "customer_segment" and matched_product_categories:
-            continue
-        filtered = _filter_by_known_values(filtered, column, normalized_query)
-
-    return filtered
-
-
-def _matching_values(data: pd.DataFrame, column: str, normalized_query: str) -> list[str]:
-    return [
-        value
-        for value in sorted(data[column].dropna().unique(), key=lambda item: -len(str(item)))
-        if re.search(rf"\b{re.escape(str(value).lower())}\b", normalized_query)
-    ]
-
-
-def _filter_by_known_values(data: pd.DataFrame, column: str, normalized_query: str) -> pd.DataFrame:
-    matches = _matching_values(data, column, normalized_query)
-    if not matches:
-        return data
-    return data[data[column].isin(matches)]
+    return apply_filters(data, query)
 
 
 def _regions_in_query(data: pd.DataFrame, query: str) -> list[str]:
-    normalized_query = query.lower()
-    return _matching_values(data, "region", normalized_query)
+    return matching_values(data, "region", query.lower())
 
 
 def _asks_lost_or_excluded_region_revenue(normalized_query: str) -> bool:
@@ -234,9 +203,23 @@ def _format_signed_money(value: float) -> str:
 
 
 def _filter_note(data: pd.DataFrame) -> str:
-    start = data["date"].min().date()
-    end = data["date"].max().date()
-    return f"Scope: {len(data):,} rows from {start} to {end}."
+    return filter_note(data)
+
+
+def _finding(text: str) -> str:
+    return f"Finding: {text}"
+
+
+def _partner_action(is_dip: bool) -> str:
+    return "investigate the Q3 dip" if is_dip else "no Q3 dip to action"
+
+
+def _change_word(change: float) -> str:
+    if change > 0.005:
+        return "rose"
+    if change < -0.005:
+        return "fell"
+    return "was roughly flat"
 
 
 def _format_ranked_rows(title: str, rows: Iterable[tuple[str, float]], formatter) -> str:
@@ -257,11 +240,18 @@ def _total_revenue_by(data: pd.DataFrame, dimension: str) -> str:
     )
     label = dimension.replace("_", " ")
     rows = list(grouped[[dimension, "revenue"]].itertuples(index=False, name=None))
+    leader = grouped.iloc[0]
+    total = grouped["revenue"].sum()
+    share = 0.0 if total == 0 else leader["revenue"] / total
     return "\n".join(
         [
             f"Total revenue by {label}",
             _filter_note(data),
             _format_ranked_rows("Results:", rows, _format_money),
+            _finding(
+                f"{leader[dimension]} leads {label} revenue at "
+                f"{_format_money(leader['revenue'])} ({_format_percent(share)} of the total)."
+            ),
         ]
     )
 
@@ -298,6 +288,10 @@ def _lost_or_excluded_region_revenue(data: pd.DataFrame, query: str) -> str:
             f"Percentage retained: {_format_percent(percent_retained)}",
             f"Percentage lost: {_format_percent(percent_lost)}",
             _format_ranked_rows("Excluded region revenue:", rows, _format_money),
+            _finding(
+                f"Excluding {', '.join(regions)} removes {_format_percent(percent_lost)} of total "
+                f"revenue ({_format_money(excluded_revenue)}); treat as revenue at risk."
+            ),
         ]
     )
 
@@ -320,6 +314,10 @@ def _average_gross_margin_by_channel(data: pd.DataFrame) -> str:
             f"Strongest channel: {strongest['sales_channel']} at "
             f"{_format_percent(strongest['gross_margin'])}.",
             _format_ranked_rows("Results:", rows, _format_percent),
+            _finding(
+                f"Prioritise {strongest['sales_channel']} for margin: it has the highest "
+                f"average gross margin at {_format_percent(strongest['gross_margin'])}."
+            ),
         ]
     )
 
@@ -338,11 +336,16 @@ def _top_products(data: pd.DataFrame, metric: str, query: str) -> str:
     formatter = _format_money if metric == "revenue" else lambda value: f"{value:,.0f}"
     metric_label = metric.replace("_", " ")
     rows = list(grouped[["product_name", metric]].itertuples(index=False, name=None))
+    leader_name, leader_value = rows[0]
     return "\n".join(
         [
             f"Top {top_n} products by {metric_label}",
             _filter_note(data),
             _format_ranked_rows("Results:", rows, formatter),
+            _finding(
+                f"{leader_name} is the leading product by {metric_label} at "
+                f"{formatter(leader_value)}."
+            ),
         ]
     )
 
@@ -364,6 +367,14 @@ def _month_over_month_revenue(data: pd.DataFrame) -> str:
     for row in recent.itertuples(index=False):
         change = "n/a" if pd.isna(row.mom_change) else _format_percent(row.mom_change)
         lines.append(f"- {row.month}: {_format_money(row.revenue)} ({change} MoM)")
+    last = recent.iloc[-1]
+    if pd.notna(last.mom_change):
+        lines.append(
+            _finding(
+                f"Revenue {_change_word(last.mom_change)} {_format_percent(last.mom_change)} "
+                f"month-over-month in {last.month}."
+            )
+        )
     return "\n".join(lines)
 
 
@@ -434,6 +445,16 @@ def _emea_q3_softness(data: pd.DataFrame) -> str:
             f"change {_format_signed_money(row['absolute_change'])} ({pct_text})"
         )
     lines.append(contributor_text)
+    if q3_revenue < q2_revenue:
+        direction = _change_word(percent_change) if percent_change is not None else "fell"
+        lines.append(
+            _finding(
+                f"EMEA Q3 revenue {direction} {percent_change_text} vs Q2; "
+                f"{contributor_name} drove most of the drop."
+            )
+        )
+    else:
+        lines.append(_finding("EMEA Q3 revenue held up against Q2; no softness to action."))
     return "\n".join(lines)
 
 
@@ -484,5 +505,9 @@ def _emea_partner_q3_vs_q2(data: pd.DataFrame) -> str:
             f"Q2 conversion rate: {_format_percent(q2_conversion)}",
             f"Q3 conversion rate: {_format_percent(q3_conversion)}",
             f"Conversion rate change: {conversion_change:.2%} points",
+            _finding(
+                f"EMEA Partner Q3 revenue {revenue_change_text} vs Q2 with conversion "
+                f"{conversion_change:+.2%} points; {_partner_action(q3_revenue < q2_revenue)}."
+            ),
         ]
     )

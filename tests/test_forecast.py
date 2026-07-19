@@ -137,3 +137,54 @@ def test_missing_dataset_path_is_handled_cleanly(monkeypatch):
     result = forecast_module.forecast("Forecast revenue for next 30 days.")
 
     assert "Sales dataset not found" in result
+
+
+def test_forecast_output_includes_seasonal_baseline_and_coverage():
+    result = forecast("Forecast revenue for the next 30 days.")
+
+    assert "Seasonal-naive (lag-7) MAE:" in result
+    assert "Skill vs seasonal-naive:" in result
+    assert "80% interval coverage:" in result
+
+
+def test_evaluate_metric_returns_baseline_and_coverage():
+    from tools.forecast import evaluate_metric
+
+    outcome = evaluate_metric("revenue")
+
+    assert isinstance(outcome, dict)
+    assert outcome["model_mae"] >= 0
+    assert outcome["seasonal_naive_mae"] >= 0
+    assert outcome["naive_mae"] >= 0
+    assert outcome["skill_vs_seasonal"] > 0
+    assert 0.0 <= outcome["coverage_80"] <= 1.0
+    assert outcome["n_test"] > 0
+
+
+def test_evaluate_metric_rejects_unsupported_metric():
+    from tools.forecast import evaluate_metric
+
+    outcome = evaluate_metric("profit")
+
+    assert isinstance(outcome, str)
+    assert "I can forecast" in outcome
+
+
+def test_forecast_respects_region_filter_scope():
+    from tools.analyse_data import _apply_filters, _load_sales_data
+
+    query = "Forecast revenue for the next 30 days in EMEA"
+    data = _load_sales_data(__import__("config").DATA_PATH)
+    scoped_rows = len(_apply_filters(data, query))
+
+    result = forecast(query)
+
+    assert "Forecast for revenue" in result
+    assert f"Scope: {scoped_rows:,} rows" in result
+
+
+def test_forecast_global_query_has_no_scope_note():
+    result = forecast("Forecast revenue for the next 30 days.")
+
+    assert "Forecast for revenue" in result
+    assert "Scope:" not in result

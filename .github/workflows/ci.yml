@@ -43,3 +43,6 @@ jobs:
 
       - name: Tests + coverage
         run: python -m pytest --cov=. --cov-report=term-missing
+
+      - name: Evaluation harness
+        run: python -m eval.run_eval

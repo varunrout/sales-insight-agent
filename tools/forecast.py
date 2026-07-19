@@ -8,6 +8,7 @@ from sklearn.metrics import mean_absolute_error
 
 import config
 from tools.data_loader import load_sales_data
+from tools.filters import apply_filters, filter_note
 
 TOOL_NAME = "forecast"
 DATA_PATH = config.DATA_PATH
@@ -31,14 +32,21 @@ def forecast(query: str) -> str:
     if isinstance(data, str):
         return data
 
+    # Forecast the scope the user asked about: "forecast EMEA revenue" should
+    # forecast EMEA, not the global total.
+    scoped = apply_filters(data, query)
+    if scoped.empty:
+        return "No sales records matched the requested filters, so there is nothing to forecast."
+
     horizon_days = _parse_horizon_days(query)
     output_frequency = _parse_output_frequency(query)
-    series = _aggregate_daily(data, metric)
+    series = _aggregate_daily(scoped, metric)
 
     if len(series) < 90:
-        return "Not enough historical data to produce a reliable forecast."
+        return "Not enough historical data to produce a reliable forecast for the requested scope."
 
     model_result = _fit_backtest_model(series, metric)
+    evaluation = _evaluate_backtest(series, metric)
     future = _forecast_future(
         series=series,
         metric=metric,
@@ -49,15 +57,30 @@ def forecast(query: str) -> str:
     display_rows = _format_future_rows(future, metric, output_frequency)
 
     metric_label = metric.replace("_", " ")
+    projected_daily = float(future["p50"].mean())
+    beats = evaluation["skill_vs_seasonal"] < 1
+    finding = (
+        f"Finding: {metric_label} is projected around {_format_number(projected_daily)} per day "
+        f"over the next {horizon_days} days; the model "
+        f"{'beats' if beats else 'does not beat'} the seasonal-naive baseline "
+        f"(skill {evaluation['skill_vs_seasonal']:.2f})."
+    )
     return "\n".join(
         [
             f"Forecast for {metric_label}",
             f"Horizon: {horizon_days} days",
             f"Output frequency: {output_frequency}",
+            *([filter_note(scoped)] if len(scoped) != len(data) else []),
             f"Backtest MAE: {_format_number(model_result['mae'])}",
             f"Backtest RMSE: {_format_number(model_result['rmse'])}",
+            f"Seasonal-naive (lag-7) MAE: {_format_number(evaluation['seasonal_naive_mae'])}",
+            f"Skill vs seasonal-naive: {evaluation['skill_vs_seasonal']:.2f} "
+            f"({_skill_verdict(evaluation['skill_vs_seasonal'])})",
+            f"80% interval coverage: {evaluation['coverage_80']:.0%} "
+            f"(target 80%, n={evaluation['n_test']})",
             "Future forecast rows:",
             display_rows,
+            finding,
         ]
     )
 
@@ -256,3 +279,86 @@ def _format_future_rows(future: pd.DataFrame, metric: str, output_frequency: str
 
 def _format_number(value: float) -> str:
     return f"{value:,.2f}"
+
+
+def evaluate_metric(metric: str, data_path: Path = DATA_PATH) -> dict[str, float] | str:
+    """Backtest a metric and compare the model to naive baselines.
+
+    Returns a metrics dict, or an error string if the data cannot be loaded or
+    the metric is unsupported. Used by both the forecast tool and the eval
+    harness so the reported numbers come from one place.
+    """
+    if metric not in SUPPORTED_METRICS:
+        return UNSUPPORTED_MESSAGE
+    data = _load_sales_data(data_path)
+    if isinstance(data, str):
+        return data
+    series = _aggregate_daily(data, metric)
+    if len(series) < 90:
+        return "Not enough historical data to produce a reliable forecast."
+    return _evaluate_backtest(series, metric)
+
+
+def _evaluate_backtest(series: pd.DataFrame, metric: str) -> dict[str, float]:
+    """Score the model against seasonal-naive and last-value baselines.
+
+    All models are scored on the identical chronological holdout. Prediction
+    interval quantiles come from an inner validation split of the training
+    window, so interval coverage is measured on data the interval was not
+    tuned on.
+    """
+    featured = _add_features(series, metric)
+    features = _feature_columns()
+    test_size = min(60, max(28, len(featured) // 5))
+    train_full = featured.iloc[:-test_size]
+    test = featured.iloc[-test_size:]
+
+    # Prediction-interval quantiles from an inner validation split (no peeking).
+    val_size = min(test_size, max(14, len(train_full) // 5))
+    inner_train = train_full.iloc[:-val_size]
+    val = train_full.iloc[-val_size:]
+    calibration_model = _build_model()
+    calibration_model.fit(inner_train[features], inner_train[metric])
+    val_predictions = np.maximum(calibration_model.predict(val[features]), 0)
+    val_residuals = val[metric].to_numpy() - val_predictions
+    q10, q90 = np.quantile(val_residuals, [0.10, 0.90])
+
+    # Model scored on the held-out test window.
+    model = _build_model()
+    model.fit(train_full[features], train_full[metric])
+    predictions = np.maximum(model.predict(test[features]), 0)
+    actuals = test[metric].to_numpy()
+
+    model_mae = float(mean_absolute_error(actuals, predictions))
+    model_rmse = float(np.sqrt(np.mean((actuals - predictions) ** 2)))
+
+    # Baselines on the same test rows: lag-7 (seasonal) and lag-1 (last value).
+    seasonal_predictions = test["lag_7"].to_numpy()
+    naive_predictions = test["lag_1"].to_numpy()
+    seasonal_naive_mae = float(mean_absolute_error(actuals, seasonal_predictions))
+    naive_mae = float(mean_absolute_error(actuals, naive_predictions))
+    skill_vs_seasonal = model_mae / seasonal_naive_mae if seasonal_naive_mae > 0 else float("nan")
+
+    # Empirical coverage of the 80% interval on the test window.
+    lower = np.maximum(predictions + q10, 0)
+    upper = np.maximum(predictions + q90, lower)
+    inside = (actuals >= lower) & (actuals <= upper)
+    coverage_80 = float(np.mean(inside))
+
+    return {
+        "model_mae": model_mae,
+        "model_rmse": model_rmse,
+        "seasonal_naive_mae": seasonal_naive_mae,
+        "naive_mae": naive_mae,
+        "skill_vs_seasonal": float(skill_vs_seasonal),
+        "coverage_80": coverage_80,
+        "n_test": int(test_size),
+    }
+
+
+def _skill_verdict(skill: float) -> str:
+    if skill != skill:  # NaN
+        return "no baseline available"
+    if skill < 1.0:
+        return "model beats seasonal-naive"
+    return "model does not beat seasonal-naive"
