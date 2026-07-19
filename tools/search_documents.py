@@ -15,4 +15,8 @@ def search_documents(query: str) -> str:
     if not results:
         return "No matching documents found for that question."
 
-    return f"Document search results for: {query}\n{format_search_results(results)}"
+    top = results[0]
+    finding = (
+        f"Finding: the closest evidence is {top.source} (relevance {top.score:.2f}); start there."
+    )
+    return f"Document search results for: {query}\n{format_search_results(results)}\n{finding}"
