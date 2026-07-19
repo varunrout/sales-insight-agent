@@ -45,9 +45,7 @@ def test_simple_sales_query_routes_to_analyse_data():
 
 
 def test_singular_customer_query_routes_to_analyse_data():
-    trace = run_agent_with_trace(
-        "Which customer segment has the highest conversion rate?"
-    )
+    trace = run_agent_with_trace("Which customer segment has the highest conversion rate?")
 
     assert trace["tools_used"] == ["analyse_data"]
     assert "I can answer structured sales questions" in trace["answer"]
@@ -83,7 +81,9 @@ def test_planner_returns_ordered_tool_chain_for_analysis_plus_chart():
 
 
 def test_planner_still_handles_document_plus_forecast_with_parser():
-    assert plan_tool_calls("Search the docs for EMEA risks and forecast revenue for next month") == [
+    assert plan_tool_calls(
+        "Search the docs for EMEA risks and forecast revenue for next month"
+    ) == [
         "search_documents",
         "forecast",
     ]
@@ -188,9 +188,7 @@ def test_tool_error_details_are_not_exposed_in_answer(monkeypatch):
 
     assert trace["answer"] == GENERIC_TOOL_FAILURE_MESSAGE
     assert trace["errors"] == ["database password leaked in stack trace"]
-    assert trace["intermediate_outputs"][0]["error"] == (
-        "database password leaked in stack trace"
-    )
+    assert trace["intermediate_outputs"][0]["error"] == ("database password leaked in stack trace")
     assert "database password" not in trace["answer"]
 
 

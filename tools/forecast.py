@@ -9,7 +9,6 @@ from sklearn.metrics import mean_absolute_error
 import config
 from tools.data_loader import load_sales_data
 
-
 TOOL_NAME = "forecast"
 DATA_PATH = config.DATA_PATH
 
@@ -233,9 +232,7 @@ def _format_future_rows(future: pd.DataFrame, metric: str, output_frequency: str
         weekly["forecast_week"] = np.arange(len(weekly)) // 7
         weekly["period_start"] = weekly.groupby("forecast_week")["date"].transform("min")
         display = (
-            weekly.groupby(["forecast_week", "period_start"], as_index=False)[
-                ["p10", "p50", "p90"]
-            ]
+            weekly.groupby(["forecast_week", "period_start"], as_index=False)[["p10", "p50", "p90"]]
             .sum()
             .sort_values("forecast_week")
         )
@@ -245,10 +242,7 @@ def _format_future_rows(future: pd.DataFrame, metric: str, output_frequency: str
     rows = []
     for row in display.head(12).itertuples(index=False):
         if output_frequency == "weekly":
-            period = (
-                f"Week {int(row.forecast_week) + 1} starting "
-                f"{row.period_start.date()}"
-            )
+            period = f"Week {int(row.forecast_week) + 1} starting {row.period_start.date()}"
         else:
             period = str(row.period.date())
         rows.append(

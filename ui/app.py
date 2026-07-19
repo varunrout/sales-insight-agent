@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+import re
 from collections.abc import MutableMapping
 from pathlib import Path
-import re
 from typing import Any
 
 import pandas as pd
@@ -11,7 +11,6 @@ import streamlit.components.v1 as components
 
 import config
 from agent.graph import run_agent_with_trace
-
 
 AVAILABLE_TOOLS = [
     "analyse_data",
@@ -77,9 +76,7 @@ def load_dataset_summary(data_path: Path | None = None) -> dict[str, Any]:
         data = pd.read_csv(path, parse_dates=["date"])
         summary["row_count"] = int(len(data))
         if "date" in data.columns and not data["date"].isna().all():
-            summary["date_range"] = (
-                f"{data['date'].min().date()} to {data['date'].max().date()}"
-            )
+            summary["date_range"] = f"{data['date'].min().date()} to {data['date'].max().date()}"
         else:
             summary["date_range"] = "Date column unavailable"
     except Exception as exc:  # pragma: no cover - defensive UI boundary

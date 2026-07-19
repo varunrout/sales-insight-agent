@@ -6,7 +6,6 @@ from pathlib import Path
 
 from config import DOCS_PATH
 
-
 DEFAULT_CHUNK_SIZE = 900
 DEFAULT_CHUNK_OVERLAP = 150
 

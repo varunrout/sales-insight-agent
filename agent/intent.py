@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, field
 import re
+from dataclasses import asdict, dataclass, field
 from typing import Any
-
 
 INTENT_ANALYSIS = "analysis"
 INTENT_VISUALISATION = "visualisation"
@@ -128,7 +127,8 @@ def _split_query_steps(query: str) -> list[str]:
         clause.strip()
         for clause in re.split(
             r"\b(?:and then|then|also)\b|"
-            r"\band\b(?=\s+(?:show|chart|plot|forecast|predict|search|analyse|analyze|what does))|,",
+            r"\band\b(?=\s+(?:show|chart|plot|forecast|predict|search"
+            r"|analyse|analyze|what does))|,",
             query,
             flags=re.IGNORECASE,
         )
@@ -220,18 +220,12 @@ def _excluded_values_for_field(
         for term in ("excluding", "exclude", "without", "lost", "lose", "at risk")
     ):
         return []
-    return [
-        value
-        for value in values
-        if _contains_phrase(normalized, value.lower())
-    ]
+    return [value for value in values if _contains_phrase(normalized, value.lower())]
 
 
 def _parse_comparison(normalized: str) -> str | None:
     if _contains_phrase(normalized, "q3") and (
-        _contains_phrase(normalized, "q2")
-        or "soft" in normalized
-        or "performance" in normalized
+        _contains_phrase(normalized, "q2") or "soft" in normalized or "performance" in normalized
     ):
         return "q3_vs_q2"
     if (
@@ -270,9 +264,7 @@ def _parse_analysis_type(
         if _contains_phrase(normalized, "most exposed"):
             return "concentration"
         return "risk"
-    if _contains_phrase(normalized, "prioritise") or _contains_phrase(
-        normalized, "prioritize"
-    ):
+    if _contains_phrase(normalized, "prioritise") or _contains_phrase(normalized, "prioritize"):
         return "opportunity"
     if _contains_phrase(normalized, "by") and dimensions:
         return "breakdown"

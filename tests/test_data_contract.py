@@ -3,7 +3,6 @@ import json
 from datetime import datetime
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[1]
 DATA_PATH = ROOT / "data" / "sample_sales.csv"
 DOCS_PATH = ROOT / "data" / "docs"

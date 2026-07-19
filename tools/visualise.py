@@ -7,7 +7,6 @@ import plotly.express as px
 import config
 from tools.data_loader import load_sales_data
 
-
 TOOL_NAME = "visualise"
 DATA_PATH = config.DATA_PATH
 CHART_OUTPUT_PATH = config.CHART_OUTPUT_PATH
@@ -90,9 +89,8 @@ def _asks_month_over_month_revenue(normalized_query: str) -> bool:
 
 
 def _asks_average_margin_by_channel(normalized_query: str) -> bool:
-    return (
-        "gross margin" in normalized_query
-        and ("channel" in normalized_query or "sales channel" in normalized_query)
+    return "gross margin" in normalized_query and (
+        "channel" in normalized_query or "sales channel" in normalized_query
     )
 
 
@@ -196,10 +194,7 @@ def _monthly_revenue_chart(data: pd.DataFrame, month_over_month: bool) -> str:
 
 
 def _emea_q2_q3_revenue_by_channel_chart(data: pd.DataFrame) -> str:
-    scoped = data[
-        (data["region"] == "EMEA")
-        & (data["date"].dt.quarter.isin([2, 3]))
-    ].copy()
+    scoped = data[(data["region"] == "EMEA") & (data["date"].dt.quarter.isin([2, 3]))].copy()
     if scoped.empty:
         return "No EMEA Q2 or Q3 records were found for charting."
 

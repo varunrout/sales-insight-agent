@@ -1,5 +1,5 @@
-from pathlib import Path
 import ast
+from pathlib import Path
 
 import pandas as pd
 
@@ -50,9 +50,7 @@ def test_next_30_days_is_parsed_correctly():
 def test_next_4_weeks_returns_four_forecast_week_rows():
     result = forecast("Forecast revenue for next 4 weeks.")
     weekly_rows = [
-        line
-        for line in result.splitlines()
-        if line.startswith("- Week ") and "starting" in line
+        line for line in result.splitlines() if line.startswith("- Week ") and "starting" in line
     ]
 
     assert len(weekly_rows) == 4
@@ -68,9 +66,7 @@ def test_weekly_frequency_is_not_overridden_by_monday_substring():
 
 
 def test_weekday_substring_does_not_force_daily_frequency():
-    frequency = forecast_module._parse_output_frequency(
-        "Forecast revenue weekly for weekdays."
-    )
+    frequency = forecast_module._parse_output_frequency("Forecast revenue weekly for weekdays.")
 
     assert frequency == "weekly"
 
