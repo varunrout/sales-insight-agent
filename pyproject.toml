@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sales-insight-agent"
+version = "0.1.0"
+description = "Deterministic tool-routing sales analytics assistant with embedding retrieval, forecasting and an evaluation harness."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Varun Rout" }]
+dependencies = [
+    "chromadb",
+    "numpy",
+    "pandas",
+    "plotly",
+    "scikit-learn",
+    "streamlit",
+]
+
+[project.optional-dependencies]
+dev = ["pytest", "pytest-cov", "ruff"]
+
+[project.scripts]
+sia-build-data = "scripts.build_data:main"
+sia-build-vectors = "scripts.build_vector_store:main"
+sia-eval = "eval.run_eval:main"
+
+[tool.setuptools]
+packages = ["agent", "tools", "rag", "db", "eval", "scripts", "ui"]
+py-modules = ["config"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W", "UP", "B"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["B011"]

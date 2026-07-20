@@ -73,7 +73,10 @@ def load_dataset_summary(data_path: Path | None = None) -> dict[str, Any]:
         return summary
 
     try:
-        data = pd.read_csv(path, parse_dates=["date"])
+        from tools.data_loader import read_sales_frame
+
+        data = read_sales_frame(path)
+        data["date"] = pd.to_datetime(data["date"], errors="coerce")
         summary["row_count"] = int(len(data))
         if "date" in data.columns and not data["date"].isna().all():
             summary["date_range"] = f"{data['date'].min().date()} to {data['date'].max().date()}"
