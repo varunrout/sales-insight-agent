@@ -10,3 +10,8 @@ models/
 .ruff_cache/
 .coverage
 htmlcov/
+data/*.db
+data/*.sqlite
+*.egg-info/
+build/
+dist/
