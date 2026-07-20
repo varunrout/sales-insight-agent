@@ -50,7 +50,7 @@ flowchart TD
 
 ## Data boundaries
 
-- Structured analytics and forecasting use `data/sample_sales.csv`.
+- Structured analytics and forecasting read from a SQLite store (`data/sales.db`), built from the committed seed CSV (`data/sample_sales.csv`) by `python -m scripts.build_data`. The database is gitignored and rebuilt deterministically.
 - Document retrieval embeds the business documents under `data/docs` with `all-MiniLM-L6-v2` and stores them in a persistent Chroma vector store at `rag/chroma_db`. Queries are answered by cosine nearest-neighbour search with a calibrated similarity floor (see `docs/modeling/retrieval_threshold.md`); this is semantic retrieval, not token overlap.
 - Charts are generated to local files under `outputs/charts`.
 

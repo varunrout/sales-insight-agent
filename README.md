@@ -105,6 +105,7 @@ See `docs/architecture.md` for a longer architecture walkthrough.
 | Area | Stack |
 |---|---|
 | Orchestration | Python, deterministic keyword planner in `agent/graph.py` |
+| Data store | SQLite (`sales` table), built from a seed CSV |
 | Data analysis | pandas |
 | Forecasting | scikit-learn (`HistGradientBoostingRegressor`), numpy |
 | Visualisation | Plotly |
@@ -114,7 +115,7 @@ See `docs/architecture.md` for a longer architecture walkthrough.
 
 ## 6. Dataset and business documents
 
-- **Dataset:** `data/sample_sales.csv` (synthetic but commercially realistic; not gitignored so the demo runs on clone).
+- **Dataset:** the structured tools read from a SQLite store (`data/sales.db`), built from the committed synthetic seed CSV (`data/sample_sales.csv`) by `python -m scripts.build_data`. The `.db` is gitignored and rebuilt deterministically; the seed CSV stays in git so a clone can build it.
 - **Documents:** markdown files in `data/docs/` embedded into the vector store.
 - **Vector store:** built to `rag/chroma_db/` (gitignored, rebuilt from the docs).
 - **Charts:** generated locally as HTML files in `outputs/charts/`.
@@ -156,7 +157,8 @@ Multi-step reasoning:
 From repo root:
 
 ```bash
-pip install -r requirements.txt
+pip install -e .                       # installs the package and dependencies
+python -m scripts.build_data           # builds data/sales.db from the seed CSV
 python -m scripts.build_vector_store   # embeds data/docs into rag/chroma_db (first run downloads the embedding model)
 python -m pytest
 streamlit run ui/app.py
@@ -181,6 +183,8 @@ sales-insight-agent/
   agent/            deterministic planner, intent parsing, state
   tools/            analyse_data, forecast, visualise, search_documents
   rag/              ingest, embedding retriever, Chroma vector store
+  db/               SQLite loader and schema
+  eval/             evaluation harness
   scripts/          build_vector_store
   ui/app.py         Streamlit chat interface
   data/             sample_sales.csv, docs/, sample_questions.json

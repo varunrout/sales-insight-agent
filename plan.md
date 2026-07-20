@@ -32,7 +32,7 @@ The system has four core tools:
 
 ```text
 analyse_data       structured sales analysis over CSV data
-forecast           LightGBM time-series forecasting
+forecast           scikit-learn gradient-boosting time-series forecasting
 visualise          Plotly chart generation
 search_documents   RAG-backed document retrieval
 ```
@@ -186,8 +186,7 @@ langchain-anthropic
 chromadb
 pandas
 numpy
-lightgbm
-statsmodels
+scikit-learn
 streamlit
 plotly
 python-dotenv
@@ -639,7 +638,7 @@ For weekly or monthly forecasts, adapt lags to the aggregation grain.
 
 ### Modelling approach
 
-Use LightGBM with chronological train/test split.
+Use scikit-learn's HistGradientBoostingRegressor with a chronological train/test split, compared against a seasonal-naive baseline on the same holdout.
 
 Minimum output:
 
@@ -657,7 +656,7 @@ validation_mape
 Uncertainty can be implemented through one of:
 
 ```text
-quantile LightGBM models
+quantile regression models
 bootstrap residual bands
 simple residual-based interval as a first pass
 ```
@@ -689,7 +688,7 @@ tools/forecasting
 ### Suggested commit message
 
 ```text
-tools: add LightGBM sales forecasting
+tools: add sales forecasting
 ```
 
 ## PR 6: RAG ingestion and retriever
